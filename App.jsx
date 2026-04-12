@@ -13,14 +13,16 @@ const PHASES = [
   { key: "finalTest",      label: "Final Test Passed (80%+)",     day: 8, short: "Final Test", emoji: "🏆",  color: "#22c55e", bg: "#f0fdf4" },
 ];
 
-const STATUSES = ["Not Started", "In Progress", "Completed", "Dropped", "Interview Pending", "Graduated"];
+const STATUSES = ["Not Started", "In Progress", "Completed", "Dropped", "Interview Pending", "Selected", "Not Selected"];
+const GRADUATED_STATUSES = ["Selected", "Not Selected"];
 const STATUS_CONFIG = {
   "Not Started":       { color: "#ef4444", bg: "#fef2f2", dot: "#ef4444" },
   "In Progress":       { color: "#f59e0b", bg: "#fffbeb", dot: "#f59e0b" },
   "Completed":         { color: "#22c55e", bg: "#f0fdf4", dot: "#22c55e" },
   "Dropped":           { color: "#6b7280", bg: "#f9fafb", dot: "#9ca3af" },
   "Interview Pending": { color: "#8b5cf6", bg: "#f5f3ff", dot: "#8b5cf6" },
-  "Graduated":         { color: "#0d9488", bg: "#f0fdfa", dot: "#14b8a6" },
+  "Selected":          { color: "#0d9488", bg: "#f0fdfa", dot: "#14b8a6" },
+  "Not Selected":      { color: "#d97706", bg: "#fffbeb", dot: "#f59e0b" },
 };
 
 const EMPTY_PHASES     = Object.fromEntries(PHASES.map(p => [p.key, false]));
@@ -35,7 +37,7 @@ const INITIAL_TRAINEES = [
     notes: "Waiting for interview slot. Has completed all Day 1 tasks.",
     phaseNotes: { ...EMPTY_PHASE_NOTES },
     phases: { shopifyStore: true, antiGravity: true, videosWatched: true, interviewPassed: false, chatPart1: false, chatPart2: false, shopifyTheme: false, brandedStore: false, portfolioReview: false, finalTest: false } },
-  { id: 3, name: "Sana Malik",     contact: "+91-333-5551234", status: "Graduated",         enrollDate: "2026-02-20",
+  { id: 3, name: "Sana Malik",     contact: "+91-333-5551234", status: "Selected",          enrollDate: "2026-02-20",
     notes: "Outstanding performance. Scored 94% on final test. Ready to be assigned a client.",
     phaseNotes: { ...EMPTY_PHASE_NOTES, finalTest: "Scored 94%. Excellent result!" },
     phases: { shopifyStore: true, antiGravity: true, videosWatched: true, interviewPassed: true, chatPart1: true, chatPart2: true, shopifyTheme: true, brandedStore: true, portfolioReview: true, finalTest: true } },
@@ -484,7 +486,8 @@ const STAT_CARDS = [
   { key:"Interview Pending",label:"Interview Pending", color:"#8b5cf6", bg:"linear-gradient(135deg,#f5f3ff,#ede9fe)", icon:"🎤" },
   { key:"In Progress",      label:"In Progress",       color:"#f59e0b", bg:"linear-gradient(135deg,#fffbeb,#fef3c7)", icon:"⚡" },
   { key:"Completed",        label:"Completed",         color:"#22c55e", bg:"linear-gradient(135deg,#f0fdf4,#dcfce7)", icon:"✅" },
-  { key:"Graduated",        label:"Graduated",         color:"#0d9488", bg:"linear-gradient(135deg,#f0fdfa,#ccfbf1)", icon:"🎓" },
+  { key:"Selected",         label:"Selected",          color:"#0d9488", bg:"linear-gradient(135deg,#f0fdfa,#ccfbf1)", icon:"✅" },
+  { key:"Not Selected",     label:"Not Selected",      color:"#d97706", bg:"linear-gradient(135deg,#fffbeb,#fef3c7)", icon:"❌" },
   { key:"Dropped",          label:"Dropped",           color:"#ef4444", bg:"linear-gradient(135deg,#fef2f2,#fee2e2)", icon:"🚫" },
 ];
 
@@ -513,7 +516,8 @@ export default function TraineePortal() {
   const [search,         setSearch]         = useState("");
   const [selectedRows,   setSelectedRows]   = useState(new Set());
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
-  const [showGraduated,  setShowGraduated]  = useState(false);
+  const [showSelected,     setShowSelected]     = useState(false);
+  const [showNotSelected,  setShowNotSelected]  = useState(false);
   const [dayMessages,    setDayMessages]    = useState(() => {
     try { const s=localStorage.getItem("trainee_day_messages"); if(s) return JSON.parse(s); } catch {}
     return {
@@ -543,14 +547,17 @@ export default function TraineePortal() {
     return true;
   }), [trainees, filterName, filterStatus, filterPhase, search]);
 
-  const activeTrainees    = useMemo(() => filtered.filter(t => t.status !== "Graduated"), [filtered]);
-  const graduatedTrainees = useMemo(() => filtered.filter(t => t.status === "Graduated"), [filtered]);
+  const activeTrainees      = useMemo(() => filtered.filter(t => !GRADUATED_STATUSES.includes(t.status)), [filtered]);
+  const selectedTrainees    = useMemo(() => filtered.filter(t => t.status === "Selected"), [filtered]);
+  const notSelectedTrainees = useMemo(() => filtered.filter(t => t.status === "Not Selected"), [filtered]);
 
   const updatePhase    = (id, key, val) => setTrainees(ts => ts.map(t => {
     if (t.id !== id) return t;
     const newPhases = { ...t.phases, [key]: val };
     const allDone = PHASES.every(p => newPhases[p.key]);
-    const newStatus = allDone && t.status !== "Dropped" ? "Graduated" : t.status === "Graduated" && !allDone ? "In Progress" : t.status;
+    let newStatus = t.status;
+    if (allDone && !GRADUATED_STATUSES.includes(t.status) && t.status !== "Dropped") newStatus = "Selected";
+    else if (!allDone && GRADUATED_STATUSES.includes(t.status)) newStatus = "In Progress";
     return { ...t, phases: newPhases, status: newStatus };
   }));
   const addTrainee     = (data) => setTrainees(ts => [...ts, {...data, id:Date.now()}]);
@@ -560,10 +567,11 @@ export default function TraineePortal() {
     if (t.id !== id) return t;
     const merged = { ...t, ...updates };
     const allDone = PHASES.every(p => merged.phases[p.key]);
-    if (allDone && merged.status !== "Dropped") merged.status = "Graduated";
-    else if (!allDone && merged.status === "Graduated") merged.status = "In Progress";
+    if (allDone && !GRADUATED_STATUSES.includes(merged.status) && merged.status !== "Dropped") merged.status = "Selected";
+    else if (!allDone && GRADUATED_STATUSES.includes(merged.status)) merged.status = "In Progress";
     return merged;
   }));
+  const changeTraineeStatus = (id, newStatus) => setTrainees(ts => ts.map(t => t.id === id ? { ...t, status: newStatus } : t));
 
   const uniqueNames = ["All", ...trainees.map(t=>t.name)];
   const uniqueDays  = ["All", ...Array.from(new Set(PHASES.map(p=>`Day ${p.day}`))).sort()];
@@ -589,7 +597,7 @@ export default function TraineePortal() {
 
       <div style={{ padding:"28px 32px" }}>
         {/* ── Stats ── */}
-        <div style={{ display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:16,marginBottom:28 }}>
+        <div style={{ display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:14,marginBottom:28 }}>
           {STAT_CARDS.map(card=>{
             const isActive = card.key === "total" ? filterStatus === "All" : filterStatus === card.key;
             return (
@@ -629,7 +637,7 @@ export default function TraineePortal() {
             <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search trainee name..." style={{ width:"100%",padding:"8px 14px 8px 36px",border:"1.5px solid #e2e8f0",borderRadius:9,fontSize:13,color:"#374151",background:"#f8fafc",outline:"none",fontFamily:"inherit",boxSizing:"border-box" }}/>
           </div>
           <div style={{ fontSize:13,color:"#94a3b8",fontWeight:500,marginLeft:"auto" }}>
-            Showing <strong style={{ color:"#6366f1" }}>{activeTrainees.length}</strong> active{graduatedTrainees.length > 0 ? `, ${graduatedTrainees.length} graduated` : ""} of {trainees.length} trainees
+            Showing <strong style={{ color:"#6366f1" }}>{activeTrainees.length}</strong> active{selectedTrainees.length > 0 ? `, ${selectedTrainees.length} selected` : ""}{notSelectedTrainees.length > 0 ? `, ${notSelectedTrainees.length} not selected` : ""} of {trainees.length} trainees
           </div>
         </div>
 
@@ -788,76 +796,56 @@ export default function TraineePortal() {
           <div style={{ fontSize:12,color:"#94a3b8" }}>· Click any row to view/edit remarks per stage</div>
         </div>
 
-        {/* ── Graduated Section ── */}
-        {graduatedTrainees.length > 0 && (
+        {/* ── Selected Section ── */}
+        {selectedTrainees.length > 0 && (
           <div style={{ marginTop:24 }}>
             <div
-              onClick={()=>setShowGraduated(g=>!g)}
+              onClick={()=>setShowSelected(g=>!g)}
               style={{
                 display:"flex", alignItems:"center", justifyContent:"space-between",
-                padding:"16px 22px", borderRadius: showGraduated ? "16px 16px 0 0" : 16,
+                padding:"16px 22px", borderRadius: showSelected ? "16px 16px 0 0" : 16,
                 background:"linear-gradient(135deg,#f0fdfa,#ccfbf1)",
                 border:"1.5px solid #99f6e4", cursor:"pointer",
                 transition:"border-radius 0.2s",
               }}
             >
               <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-                <span style={{ fontSize:24 }}>🎓</span>
+                <span style={{ fontSize:24 }}>✅</span>
                 <div>
                   <div style={{ fontFamily:"'Sora',sans-serif", fontWeight:800, fontSize:16, color:"#0d9488" }}>
-                    Graduated Trainees
+                    Selected Trainees
                   </div>
                   <div style={{ fontSize:12, color:"#5eead4", fontWeight:600, marginTop:2 }}>
-                    {graduatedTrainees.length} trainee{graduatedTrainees.length>1?"s":""} completed all phases including Final Test
+                    {selectedTrainees.length} trainee{selectedTrainees.length>1?"s":""} passed Final Test and got selected
                   </div>
                 </div>
               </div>
-              <div style={{
-                display:"flex", alignItems:"center", gap:8,
-              }}>
-                <span style={{
-                  background:"#0d9488", color:"#fff", borderRadius:99,
-                  padding:"4px 14px", fontSize:13, fontWeight:700,
-                }}>
-                  {graduatedTrainees.length}
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ background:"#0d9488", color:"#fff", borderRadius:99, padding:"4px 14px", fontSize:13, fontWeight:700 }}>
+                  {selectedTrainees.length}
                 </span>
-                <span style={{
-                  fontSize:18, color:"#0d9488", transition:"transform 0.2s",
-                  transform: showGraduated ? "rotate(180deg)" : "rotate(0deg)",
-                  display:"inline-block",
-                }}>▼</span>
+                <span style={{ fontSize:18, color:"#0d9488", transition:"transform 0.2s", transform: showSelected ? "rotate(180deg)" : "rotate(0deg)", display:"inline-block" }}>▼</span>
               </div>
             </div>
 
-            {showGraduated && (
-              <div style={{
-                background:"#fff", borderRadius:"0 0 18px 18px",
-                border:"1.5px solid #99f6e4", borderTop:"none",
-                overflow:"hidden", boxShadow:"0 4px 24px #0000080a",
-              }}>
-                {/* Graduated Table Header */}
-                <div style={{ display:"grid",gridTemplateColumns:"2fr 1.6fr 100px 90px repeat(10,64px)",padding:"12px 20px",background:"linear-gradient(135deg,#f0fdfa,#ecfdf5)",borderBottom:"2px solid #d1fae5",gap:8,alignItems:"center" }}>
+            {showSelected && (
+              <div style={{ background:"#fff", borderRadius:"0 0 18px 18px", border:"1.5px solid #99f6e4", borderTop:"none", overflow:"hidden", boxShadow:"0 4px 24px #0000080a" }}>
+                <div style={{ display:"grid",gridTemplateColumns:"2fr 1.4fr 130px 90px repeat(10,64px)",padding:"12px 20px",background:"linear-gradient(135deg,#f0fdfa,#ecfdf5)",borderBottom:"2px solid #d1fae5",gap:8,alignItems:"center" }}>
                   <div style={thStyle}>Trainee Name</div>
                   <div style={thStyle}>Contact</div>
-                  <div style={{ ...thStyle, textAlign:"center" }}>Status</div>
+                  <div style={{ ...thStyle, textAlign:"center" }}>Change Status</div>
                   <div style={{ ...thStyle, textAlign:"center" }}>Phase</div>
-                  {PHASES.map(p=>(
-                    <div key={p.key} title={p.label} style={{ ...thStyle,textAlign:"center",fontSize:10,lineHeight:1.3,color:p.color }}>{p.short}</div>
-                  ))}
+                  {PHASES.map(p=>(<div key={p.key} title={p.label} style={{ ...thStyle,textAlign:"center",fontSize:10,lineHeight:1.3,color:p.color }}>{p.short}</div>))}
                 </div>
-
-                {/* Graduated Rows */}
-                {graduatedTrainees.map((trainee,idx) => {
+                {selectedTrainees.map((trainee,idx) => {
                   const completedCount = getCompletedCount(trainee.phases);
-                  const cfg = STATUS_CONFIG["Graduated"];
                   return (
                     <div key={trainee.id} style={{
-                      display:"grid", gridTemplateColumns:"2fr 1.6fr 100px 90px repeat(10,64px)",
+                      display:"grid", gridTemplateColumns:"2fr 1.4fr 130px 90px repeat(10,64px)",
                       padding:"13px 20px", gap:8, alignItems:"center",
                       background: idx%2===0 ? "#fff" : "#f0fdfa",
                       borderBottom:"1px solid #f1f5f9",
                       cursor:"pointer", transition:"background 0.15s",
-                      opacity:0.85,
                     }}
                       onMouseEnter={e=>e.currentTarget.style.background="#ecfdf5"}
                       onMouseLeave={e=>e.currentTarget.style.background=idx%2===0?"#fff":"#f0fdfa"}
@@ -869,35 +857,117 @@ export default function TraineePortal() {
                         </div>
                         <div>
                           <div style={{ fontWeight:600,fontSize:14,color:"#1e293b" }}>{trainee.name}</div>
-                          <div style={{ fontSize:10,color:"#0d9488",fontWeight:600 }}>🎓 Graduated</div>
+                          <div style={{ fontSize:10,color:"#0d9488",fontWeight:600 }}>✅ Selected</div>
                         </div>
                       </div>
                       <div style={{ fontSize:13,color:"#64748b",display:"flex",alignItems:"center",gap:6 }}>📱 {trainee.contact}</div>
-                      <div style={{ display:"flex",alignItems:"center",justifyContent:"center" }}>
-                        <div style={{
-                          display:"flex", alignItems:"center", gap:5,
-                          background:"#f0fdfa", color:"#0d9488",
-                          border:"1.5px solid #14b8a644",
-                          borderRadius:7, padding:"4px 8px",
-                          fontSize:10, fontWeight:700,
+                      <div style={{ display:"flex",alignItems:"center",justifyContent:"center" }} onClick={e=>e.stopPropagation()}>
+                        <select value={trainee.status} onChange={e=>changeTraineeStatus(trainee.id,e.target.value)} style={{
+                          padding:"5px 8px", borderRadius:7, fontSize:11, fontWeight:700, cursor:"pointer", outline:"none", fontFamily:"inherit",
+                          background:STATUS_CONFIG[trainee.status]?.bg, color:STATUS_CONFIG[trainee.status]?.color,
+                          border:`1.5px solid ${STATUS_CONFIG[trainee.status]?.color}55`,
                         }}>
-                          <span style={{ width:7,height:7,borderRadius:"50%",background:"#14b8a6",flexShrink:0 }}/>
-                          Graduated
-                        </div>
+                          {STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
+                        </select>
                       </div>
                       <div style={{ textAlign:"center" }}>
-                        <div style={{ display:"inline-block",background:"linear-gradient(135deg,#ecfdf5,#d1fae5)",color:"#0d9488",fontWeight:700,fontSize:12,borderRadius:7,padding:"3px 8px" }}>
-                          Done ✓
-                        </div>
+                        <div style={{ display:"inline-block",background:"linear-gradient(135deg,#ecfdf5,#d1fae5)",color:"#0d9488",fontWeight:700,fontSize:12,borderRadius:7,padding:"3px 8px" }}>Done ✓</div>
                         <div style={{ fontSize:10,color:"#94a3b8",marginTop:2 }}>{completedCount}/{PHASES.length}</div>
                       </div>
                       {PHASES.map(p => (
                         <div key={p.key} style={{ display:"flex",justifyContent:"center" }} onClick={e=>e.stopPropagation()}>
-                          <PhaseCheckbox
-                            checked={trainee.phases[p.key]}
-                            onChange={e=>updatePhase(trainee.id,p.key,e.target.checked)}
-                            overdue={false}
-                          />
+                          <PhaseCheckbox checked={trainee.phases[p.key]} onChange={e=>updatePhase(trainee.id,p.key,e.target.checked)} overdue={false} />
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Not Selected Section ── */}
+        {notSelectedTrainees.length > 0 && (
+          <div style={{ marginTop:20 }}>
+            <div
+              onClick={()=>setShowNotSelected(g=>!g)}
+              style={{
+                display:"flex", alignItems:"center", justifyContent:"space-between",
+                padding:"16px 22px", borderRadius: showNotSelected ? "16px 16px 0 0" : 16,
+                background:"linear-gradient(135deg,#fffbeb,#fef3c7)",
+                border:"1.5px solid #fcd34d", cursor:"pointer",
+                transition:"border-radius 0.2s",
+              }}
+            >
+              <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                <span style={{ fontSize:24 }}>❌</span>
+                <div>
+                  <div style={{ fontFamily:"'Sora',sans-serif", fontWeight:800, fontSize:16, color:"#d97706" }}>
+                    Not Selected Trainees
+                  </div>
+                  <div style={{ fontSize:12, color:"#f59e0b", fontWeight:600, marginTop:2 }}>
+                    {notSelectedTrainees.length} trainee{notSelectedTrainees.length>1?"s":""} completed training but not selected
+                  </div>
+                </div>
+              </div>
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ background:"#d97706", color:"#fff", borderRadius:99, padding:"4px 14px", fontSize:13, fontWeight:700 }}>
+                  {notSelectedTrainees.length}
+                </span>
+                <span style={{ fontSize:18, color:"#d97706", transition:"transform 0.2s", transform: showNotSelected ? "rotate(180deg)" : "rotate(0deg)", display:"inline-block" }}>▼</span>
+              </div>
+            </div>
+
+            {showNotSelected && (
+              <div style={{ background:"#fff", borderRadius:"0 0 18px 18px", border:"1.5px solid #fcd34d", borderTop:"none", overflow:"hidden", boxShadow:"0 4px 24px #0000080a" }}>
+                <div style={{ display:"grid",gridTemplateColumns:"2fr 1.4fr 130px 90px repeat(10,64px)",padding:"12px 20px",background:"linear-gradient(135deg,#fffbeb,#fef3c7)",borderBottom:"2px solid #fde68a",gap:8,alignItems:"center" }}>
+                  <div style={thStyle}>Trainee Name</div>
+                  <div style={thStyle}>Contact</div>
+                  <div style={{ ...thStyle, textAlign:"center" }}>Change Status</div>
+                  <div style={{ ...thStyle, textAlign:"center" }}>Phase</div>
+                  {PHASES.map(p=>(<div key={p.key} title={p.label} style={{ ...thStyle,textAlign:"center",fontSize:10,lineHeight:1.3,color:p.color }}>{p.short}</div>))}
+                </div>
+                {notSelectedTrainees.map((trainee,idx) => {
+                  const completedCount = getCompletedCount(trainee.phases);
+                  return (
+                    <div key={trainee.id} style={{
+                      display:"grid", gridTemplateColumns:"2fr 1.4fr 130px 90px repeat(10,64px)",
+                      padding:"13px 20px", gap:8, alignItems:"center",
+                      background: idx%2===0 ? "#fff" : "#fffbeb",
+                      borderBottom:"1px solid #f1f5f9",
+                      cursor:"pointer", transition:"background 0.15s",
+                    }}
+                      onMouseEnter={e=>e.currentTarget.style.background="#fef3c7"}
+                      onMouseLeave={e=>e.currentTarget.style.background=idx%2===0?"#fff":"#fffbeb"}
+                      onClick={()=>setNotesModal(trainee)}
+                    >
+                      <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+                        <div style={{ width:34,height:34,borderRadius:10,background:"linear-gradient(135deg,#d9770622,#f59e0b44)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:13,color:"#d97706",flexShrink:0 }}>
+                          {trainee.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight:600,fontSize:14,color:"#1e293b" }}>{trainee.name}</div>
+                          <div style={{ fontSize:10,color:"#d97706",fontWeight:600 }}>❌ Not Selected</div>
+                        </div>
+                      </div>
+                      <div style={{ fontSize:13,color:"#64748b",display:"flex",alignItems:"center",gap:6 }}>📱 {trainee.contact}</div>
+                      <div style={{ display:"flex",alignItems:"center",justifyContent:"center" }} onClick={e=>e.stopPropagation()}>
+                        <select value={trainee.status} onChange={e=>changeTraineeStatus(trainee.id,e.target.value)} style={{
+                          padding:"5px 8px", borderRadius:7, fontSize:11, fontWeight:700, cursor:"pointer", outline:"none", fontFamily:"inherit",
+                          background:STATUS_CONFIG[trainee.status]?.bg, color:STATUS_CONFIG[trainee.status]?.color,
+                          border:`1.5px solid ${STATUS_CONFIG[trainee.status]?.color}55`,
+                        }}>
+                          {STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </div>
+                      <div style={{ textAlign:"center" }}>
+                        <div style={{ display:"inline-block",background:"linear-gradient(135deg,#fffbeb,#fde68a)",color:"#d97706",fontWeight:700,fontSize:12,borderRadius:7,padding:"3px 8px" }}>Done ✓</div>
+                        <div style={{ fontSize:10,color:"#94a3b8",marginTop:2 }}>{completedCount}/{PHASES.length}</div>
+                      </div>
+                      {PHASES.map(p => (
+                        <div key={p.key} style={{ display:"flex",justifyContent:"center" }} onClick={e=>e.stopPropagation()}>
+                          <PhaseCheckbox checked={trainee.phases[p.key]} onChange={e=>updatePhase(trainee.id,p.key,e.target.checked)} overdue={false} />
                         </div>
                       ))}
                     </div>
