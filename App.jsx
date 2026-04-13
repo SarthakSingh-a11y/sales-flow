@@ -541,7 +541,6 @@ const STAT_CARDS = [
   { key:"Completed",        label:"Completed",         color:"#22c55e", bg:"linear-gradient(135deg,#f0fdf4,#dcfce7)", icon:"✅" },
   { key:"Selected",         label:"Selected",          color:"#0d9488", bg:"linear-gradient(135deg,#f0fdfa,#ccfbf1)", icon:"✅" },
   { key:"Not Selected",     label:"Not Selected",      color:"#d97706", bg:"linear-gradient(135deg,#fffbeb,#fef3c7)", icon:"❌" },
-  { key:"Dropped",          label:"Dropped",           color:"#ef4444", bg:"linear-gradient(135deg,#fef2f2,#fee2e2)", icon:"🚫" },
   { key:"Leaved",           label:"Leaved",            color:"#be123c", bg:"linear-gradient(135deg,#fff1f2,#ffe4e6)", icon:"🚪" },
 ];
 
@@ -670,7 +669,7 @@ export default function TraineePortal() {
 
       <div style={{ padding:"28px 32px" }}>
         {/* ── Stats ── */}
-        <div style={{ display:"grid",gridTemplateColumns:"repeat(8,1fr)",gap:12,marginBottom:28 }}>
+        <div style={{ display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:14,marginBottom:28 }}>
           {STAT_CARDS.map(card=>{
             const isActive = card.key === "total" ? filterStatus === "All" : filterStatus === card.key;
             return (
