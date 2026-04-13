@@ -13,8 +13,9 @@ const PHASES = [
   { key: "finalTest",      label: "Final Test Passed (80%+)",     day: 8, short: "Final Test", emoji: "🏆",  color: "#22c55e", bg: "#f0fdf4" },
 ];
 
-const STATUSES = ["Not Started", "In Progress", "Completed", "Dropped", "Interview Pending", "Selected", "Not Selected"];
+const STATUSES = ["Not Started", "In Progress", "Completed", "Dropped", "Interview Pending", "Selected", "Not Selected", "Leaved"];
 const GRADUATED_STATUSES = ["Selected", "Not Selected"];
+const BOTTOM_SECTION_STATUSES = ["Selected", "Not Selected", "Leaved"];
 const STATUS_CONFIG = {
   "Not Started":       { color: "#ef4444", bg: "#fef2f2", dot: "#ef4444" },
   "In Progress":       { color: "#f59e0b", bg: "#fffbeb", dot: "#f59e0b" },
@@ -23,6 +24,7 @@ const STATUS_CONFIG = {
   "Interview Pending": { color: "#8b5cf6", bg: "#f5f3ff", dot: "#8b5cf6" },
   "Selected":          { color: "#0d9488", bg: "#f0fdfa", dot: "#14b8a6" },
   "Not Selected":      { color: "#d97706", bg: "#fffbeb", dot: "#f59e0b" },
+  "Leaved":            { color: "#be123c", bg: "#fff1f2", dot: "#f43f5e" },
 };
 
 const EMPTY_PHASES     = Object.fromEntries(PHASES.map(p => [p.key, false]));
@@ -480,6 +482,57 @@ function DeleteConfirmModal({ trainee, onConfirm, onClose }) {
   );
 }
 
+/* ─── Leaved Reason Modal ─── */
+function LeavedReasonModal({ trainee, onConfirm, onClose }) {
+  const [reason, setReason] = useState("");
+  return (
+    <div style={{ position:"fixed",inset:0,background:"#0008",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }} onClick={onClose}>
+      <div style={{ background:"#fff",borderRadius:20,padding:36,width:480,maxWidth:"95vw",boxShadow:"0 25px 60px #be123c33",fontFamily:"'DM Sans',sans-serif",border:"2px solid #fecdd3" }} onClick={e=>e.stopPropagation()}>
+        <div style={{ textAlign:"center",marginBottom:20 }}>
+          <div style={{ fontSize:48,marginBottom:8 }}>🚪</div>
+          <h2 style={{ margin:"0 0 8px",fontSize:20,fontWeight:800,color:"#1e293b",fontFamily:"'Sora',sans-serif" }}>Mark as Leaved</h2>
+          <p style={{ margin:0,fontSize:14,color:"#64748b",lineHeight:1.6 }}>
+            Moving <strong style={{ color:"#be123c" }}>{trainee.name}</strong> to Leaved section.<br/>Please provide a reason below.
+          </p>
+        </div>
+        <div style={{ marginBottom:20 }}>
+          <label style={{ display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:8 }}>📝 Reason for leaving</label>
+          <textarea
+            value={reason}
+            onChange={e=>setReason(e.target.value)}
+            rows={4}
+            autoFocus
+            placeholder="e.g. Personal reasons, got another job, health issues, lost interest, relocated..."
+            style={{
+              width:"100%",padding:"14px",border:"2px solid #fecdd3",
+              borderRadius:12,fontSize:14,color:"#1e293b",outline:"none",
+              resize:"vertical",fontFamily:"inherit",boxSizing:"border-box",
+              lineHeight:1.7,background:"#fff1f2",
+            }}
+            onFocus={e=>e.target.style.borderColor="#f43f5e"}
+            onBlur={e=>e.target.style.borderColor="#fecdd3"}
+          />
+        </div>
+        <div style={{ display:"flex",gap:12 }}>
+          <button onClick={onClose} style={{ flex:1,padding:"11px",borderRadius:10,border:"2px solid #e2e8f0",background:"#fff",color:"#64748b",fontWeight:700,cursor:"pointer",fontSize:14,fontFamily:"inherit" }}>Cancel</button>
+          <button
+            onClick={()=>{ if(reason.trim()) onConfirm(reason.trim()); }}
+            style={{
+              flex:2,padding:"11px",borderRadius:10,border:"none",
+              background: reason.trim() ? "linear-gradient(135deg,#be123c,#e11d48)" : "#e2e8f0",
+              color: reason.trim() ? "#fff" : "#94a3b8",
+              fontWeight:700,cursor: reason.trim() ? "pointer" : "not-allowed",
+              fontSize:14,fontFamily:"inherit",
+              boxShadow: reason.trim() ? "0 4px 16px #be123c44" : "none",
+              transition:"all 0.2s",
+            }}
+          >🚪 Confirm Leaved</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── STAT CARDS ─── */
 const STAT_CARDS = [
   { key:"total",            label:"Total Trainees",    color:"#6366f1", bg:"linear-gradient(135deg,#eef2ff,#e0e7ff)", icon:"👥" },
@@ -489,6 +542,7 @@ const STAT_CARDS = [
   { key:"Selected",         label:"Selected",          color:"#0d9488", bg:"linear-gradient(135deg,#f0fdfa,#ccfbf1)", icon:"✅" },
   { key:"Not Selected",     label:"Not Selected",      color:"#d97706", bg:"linear-gradient(135deg,#fffbeb,#fef3c7)", icon:"❌" },
   { key:"Dropped",          label:"Dropped",           color:"#ef4444", bg:"linear-gradient(135deg,#fef2f2,#fee2e2)", icon:"🚫" },
+  { key:"Leaved",           label:"Leaved",            color:"#be123c", bg:"linear-gradient(135deg,#fff1f2,#ffe4e6)", icon:"🚪" },
 ];
 
 const thStyle = { fontSize:11, fontWeight:700, color:"#64748b", textTransform:"uppercase", letterSpacing:"0.04em" };
@@ -518,6 +572,8 @@ export default function TraineePortal() {
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
   const [showSelected,     setShowSelected]     = useState(false);
   const [showNotSelected,  setShowNotSelected]  = useState(false);
+  const [showLeaved,       setShowLeaved]       = useState(false);
+  const [leavedModal,      setLeavedModal]      = useState(null); // { id, name } — trainee being moved to Leaved
   const [dayMessages,    setDayMessages]    = useState(() => {
     try { const s=localStorage.getItem("trainee_day_messages"); if(s) return JSON.parse(s); } catch {}
     return {
@@ -547,17 +603,21 @@ export default function TraineePortal() {
     return true;
   }), [trainees, filterName, filterStatus, filterPhase, search]);
 
-  const activeTrainees      = useMemo(() => filtered.filter(t => !GRADUATED_STATUSES.includes(t.status)), [filtered]);
+  const activeTrainees      = useMemo(() => filtered.filter(t => !BOTTOM_SECTION_STATUSES.includes(t.status)), [filtered]);
   const selectedTrainees    = useMemo(() => filtered.filter(t => t.status === "Selected"), [filtered]);
   const notSelectedTrainees = useMemo(() => filtered.filter(t => t.status === "Not Selected"), [filtered]);
+  const leavedTrainees      = useMemo(() => filtered.filter(t => t.status === "Leaved"), [filtered]);
 
   const updatePhase    = (id, key, val) => setTrainees(ts => ts.map(t => {
     if (t.id !== id) return t;
     const newPhases = { ...t.phases, [key]: val };
     const allDone = PHASES.every(p => newPhases[p.key]);
     let newStatus = t.status;
-    if (allDone && !GRADUATED_STATUSES.includes(t.status) && t.status !== "Dropped") newStatus = "Selected";
-    else if (!allDone && GRADUATED_STATUSES.includes(t.status)) newStatus = "In Progress";
+    // Don't auto-change status for Leaved or Dropped trainees
+    if (t.status !== "Leaved" && t.status !== "Dropped") {
+      if (allDone && !GRADUATED_STATUSES.includes(t.status)) newStatus = "Selected";
+      else if (!allDone && GRADUATED_STATUSES.includes(t.status)) newStatus = "In Progress";
+    }
     return { ...t, phases: newPhases, status: newStatus };
   }));
   const addTrainee     = (data) => setTrainees(ts => [...ts, {...data, id:Date.now()}]);
@@ -567,11 +627,24 @@ export default function TraineePortal() {
     if (t.id !== id) return t;
     const merged = { ...t, ...updates };
     const allDone = PHASES.every(p => merged.phases[p.key]);
-    if (allDone && !GRADUATED_STATUSES.includes(merged.status) && merged.status !== "Dropped") merged.status = "Selected";
-    else if (!allDone && GRADUATED_STATUSES.includes(merged.status)) merged.status = "In Progress";
+    if (merged.status !== "Leaved" && merged.status !== "Dropped") {
+      if (allDone && !GRADUATED_STATUSES.includes(merged.status)) merged.status = "Selected";
+      else if (!allDone && GRADUATED_STATUSES.includes(merged.status)) merged.status = "In Progress";
+    }
     return merged;
   }));
-  const changeTraineeStatus = (id, newStatus) => setTrainees(ts => ts.map(t => t.id === id ? { ...t, status: newStatus } : t));
+  const changeTraineeStatus = (id, newStatus) => {
+    if (newStatus === "Leaved") {
+      const t = trainees.find(t => t.id === id);
+      setLeavedModal({ id, name: t?.name || "" });
+      return;
+    }
+    setTrainees(ts => ts.map(t => t.id === id ? { ...t, status: newStatus } : t));
+  };
+  const confirmLeaved = (id, reason) => {
+    setTrainees(ts => ts.map(t => t.id === id ? { ...t, status: "Leaved", leavedReason: reason, leavedDate: new Date().toISOString().slice(0,10) } : t));
+    setLeavedModal(null);
+  };
 
   const uniqueNames = ["All", ...trainees.map(t=>t.name)];
   const uniqueDays  = ["All", ...Array.from(new Set(PHASES.map(p=>`Day ${p.day}`))).sort()];
@@ -597,7 +670,7 @@ export default function TraineePortal() {
 
       <div style={{ padding:"28px 32px" }}>
         {/* ── Stats ── */}
-        <div style={{ display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:14,marginBottom:28 }}>
+        <div style={{ display:"grid",gridTemplateColumns:"repeat(8,1fr)",gap:12,marginBottom:28 }}>
           {STAT_CARDS.map(card=>{
             const isActive = card.key === "total" ? filterStatus === "All" : filterStatus === card.key;
             return (
@@ -637,7 +710,7 @@ export default function TraineePortal() {
             <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search trainee name..." style={{ width:"100%",padding:"8px 14px 8px 36px",border:"1.5px solid #e2e8f0",borderRadius:9,fontSize:13,color:"#374151",background:"#f8fafc",outline:"none",fontFamily:"inherit",boxSizing:"border-box" }}/>
           </div>
           <div style={{ fontSize:13,color:"#94a3b8",fontWeight:500,marginLeft:"auto" }}>
-            Showing <strong style={{ color:"#6366f1" }}>{activeTrainees.length}</strong> active{selectedTrainees.length > 0 ? `, ${selectedTrainees.length} selected` : ""}{notSelectedTrainees.length > 0 ? `, ${notSelectedTrainees.length} not selected` : ""} of {trainees.length} trainees
+            Showing <strong style={{ color:"#6366f1" }}>{activeTrainees.length}</strong> active{selectedTrainees.length > 0 ? `, ${selectedTrainees.length} selected` : ""}{notSelectedTrainees.length > 0 ? `, ${notSelectedTrainees.length} not selected` : ""}{leavedTrainees.length > 0 ? `, ${leavedTrainees.length} leaved` : ""} of {trainees.length} trainees
           </div>
         </div>
 
@@ -741,20 +814,15 @@ export default function TraineePortal() {
                 {/* Contact */}
                 <div style={{ fontSize:13,color:"#64748b",display:"flex",alignItems:"center",gap:6 }}>📱 {trainee.contact}</div>
 
-                {/* Status — colored badge, NO dropdown */}
-                <div style={{ display:"flex",alignItems:"center",justifyContent:"center" }}>
-                  <div style={{
-                    display:"flex", alignItems:"center", gap:5,
-                    background: cfg.bg, color: cfg.color,
-                    border:`1.5px solid ${cfg.color}44`,
-                    borderRadius:7, padding:"4px 8px",
-                    fontSize:10, fontWeight:700,
+                {/* Status — dropdown */}
+                <div style={{ display:"flex",alignItems:"center",justifyContent:"center" }} onClick={e=>e.stopPropagation()}>
+                  <select value={trainee.status} onChange={e=>changeTraineeStatus(trainee.id,e.target.value)} style={{
+                    padding:"4px 6px", borderRadius:7, fontSize:10, fontWeight:700, cursor:"pointer", outline:"none", fontFamily:"inherit",
+                    background:cfg.bg, color:cfg.color,
+                    border:`1.5px solid ${cfg.color}55`, maxWidth:95,
                   }}>
-                    <span style={{ width:7,height:7,borderRadius:"50%",background:cfg.dot,flexShrink:0 }}/>
-                    {trainee.status === "Interview Pending" ? "Interview…" :
-                     trainee.status === "Not Started" ? "Not Started" :
-                     trainee.status}
-                  </div>
+                    {STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
+                  </select>
                 </div>
 
                 {/* Phase */}
@@ -977,6 +1045,109 @@ export default function TraineePortal() {
             )}
           </div>
         )}
+
+        {/* ── Leaved Section ── */}
+        {leavedTrainees.length > 0 && (
+          <div style={{ marginTop:20 }}>
+            <div
+              onClick={()=>setShowLeaved(g=>!g)}
+              style={{
+                display:"flex", alignItems:"center", justifyContent:"space-between",
+                padding:"16px 22px", borderRadius: showLeaved ? "16px 16px 0 0" : 16,
+                background:"linear-gradient(135deg,#fff1f2,#ffe4e6)",
+                border:"1.5px solid #fecdd3", cursor:"pointer",
+                transition:"border-radius 0.2s",
+              }}
+            >
+              <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                <span style={{ fontSize:24 }}>🚪</span>
+                <div>
+                  <div style={{ fontFamily:"'Sora',sans-serif", fontWeight:800, fontSize:16, color:"#be123c" }}>
+                    Leaved Trainees
+                  </div>
+                  <div style={{ fontSize:12, color:"#f43f5e", fontWeight:600, marginTop:2 }}>
+                    {leavedTrainees.length} trainee{leavedTrainees.length>1?"s":""} left the program
+                  </div>
+                </div>
+              </div>
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ background:"#be123c", color:"#fff", borderRadius:99, padding:"4px 14px", fontSize:13, fontWeight:700 }}>
+                  {leavedTrainees.length}
+                </span>
+                <span style={{ fontSize:18, color:"#be123c", transition:"transform 0.2s", transform: showLeaved ? "rotate(180deg)" : "rotate(0deg)", display:"inline-block" }}>▼</span>
+              </div>
+            </div>
+
+            {showLeaved && (
+              <div style={{ background:"#fff", borderRadius:"0 0 18px 18px", border:"1.5px solid #fecdd3", borderTop:"none", overflow:"hidden", boxShadow:"0 4px 24px #0000080a" }}>
+                <div style={{ display:"grid",gridTemplateColumns:"2fr 1.4fr 1.5fr 130px 90px repeat(10,64px)",padding:"12px 20px",background:"linear-gradient(135deg,#fff1f2,#ffe4e6)",borderBottom:"2px solid #fecdd3",gap:8,alignItems:"center" }}>
+                  <div style={thStyle}>Trainee Name</div>
+                  <div style={thStyle}>Contact</div>
+                  <div style={thStyle}>Reason</div>
+                  <div style={{ ...thStyle, textAlign:"center" }}>Change Status</div>
+                  <div style={{ ...thStyle, textAlign:"center" }}>Phase</div>
+                  {PHASES.map(p=>(<div key={p.key} title={p.label} style={{ ...thStyle,textAlign:"center",fontSize:10,lineHeight:1.3,color:p.color }}>{p.short}</div>))}
+                </div>
+                {leavedTrainees.map((trainee,idx) => {
+                  const completedCount = getCompletedCount(trainee.phases);
+                  const currentDay = getPhaseDay(trainee.phases);
+                  return (
+                    <div key={trainee.id} style={{
+                      display:"grid", gridTemplateColumns:"2fr 1.4fr 1.5fr 130px 90px repeat(10,64px)",
+                      padding:"13px 20px", gap:8, alignItems:"center",
+                      background: idx%2===0 ? "#fff" : "#fff1f2",
+                      borderBottom:"1px solid #f1f5f9",
+                      cursor:"pointer", transition:"background 0.15s",
+                    }}
+                      onMouseEnter={e=>e.currentTarget.style.background="#ffe4e6"}
+                      onMouseLeave={e=>e.currentTarget.style.background=idx%2===0?"#fff":"#fff1f2"}
+                      onClick={()=>setNotesModal(trainee)}
+                    >
+                      <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+                        <div style={{ width:34,height:34,borderRadius:10,background:"linear-gradient(135deg,#be123c22,#f43f5e44)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:13,color:"#be123c",flexShrink:0 }}>
+                          {trainee.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight:600,fontSize:14,color:"#1e293b" }}>{trainee.name}</div>
+                          <div style={{ fontSize:10,color:"#be123c",fontWeight:600 }}>🚪 Leaved{trainee.leavedDate ? ` · ${new Date(trainee.leavedDate).toLocaleDateString("en-IN",{day:"numeric",month:"short"})}` : ""}</div>
+                        </div>
+                      </div>
+                      <div style={{ fontSize:13,color:"#64748b",display:"flex",alignItems:"center",gap:6 }}>📱 {trainee.contact}</div>
+                      {/* Reason */}
+                      <div style={{ fontSize:12,color:"#64748b",lineHeight:1.5,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" }} title={trainee.leavedReason||""}>
+                        {trainee.leavedReason ? (
+                          <span style={{ background:"#fff1f2",border:"1px solid #fecdd3",borderRadius:6,padding:"4px 8px",display:"inline-block",color:"#be123c",fontSize:11,fontWeight:500,maxWidth:"100%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
+                            📝 {trainee.leavedReason}
+                          </span>
+                        ) : <span style={{ color:"#d1d5db",fontStyle:"italic" }}>No reason</span>}
+                      </div>
+                      <div style={{ display:"flex",alignItems:"center",justifyContent:"center" }} onClick={e=>e.stopPropagation()}>
+                        <select value={trainee.status} onChange={e=>changeTraineeStatus(trainee.id,e.target.value)} style={{
+                          padding:"5px 8px", borderRadius:7, fontSize:11, fontWeight:700, cursor:"pointer", outline:"none", fontFamily:"inherit",
+                          background:STATUS_CONFIG[trainee.status]?.bg, color:STATUS_CONFIG[trainee.status]?.color,
+                          border:`1.5px solid ${STATUS_CONFIG[trainee.status]?.color}55`,
+                        }}>
+                          {STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </div>
+                      <div style={{ textAlign:"center" }}>
+                        <div style={{ display:"inline-block",background:"linear-gradient(135deg,#fff1f2,#fecdd3)",color:"#be123c",fontWeight:700,fontSize:12,borderRadius:7,padding:"3px 8px" }}>
+                          {completedCount===PHASES.length ? "Done ✓" : currentDay===0 ? "Day 0" : `Day ${currentDay}`}
+                        </div>
+                        <div style={{ fontSize:10,color:"#94a3b8",marginTop:2 }}>{completedCount}/{PHASES.length}</div>
+                      </div>
+                      {PHASES.map(p => (
+                        <div key={p.key} style={{ display:"flex",justifyContent:"center" }} onClick={e=>e.stopPropagation()}>
+                          <PhaseCheckbox checked={trainee.phases[p.key]} onChange={e=>updatePhase(trainee.id,p.key,e.target.checked)} overdue={false} />
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Modals ── */}
@@ -1015,6 +1186,14 @@ export default function TraineePortal() {
           trainee={trainees.find(t=>t.id===deleteConfirm)}
           onConfirm={()=>deleteTrainee(deleteConfirm)}
           onClose={()=>setDeleteConfirm(null)}
+        />
+      )}
+
+      {leavedModal && (
+        <LeavedReasonModal
+          trainee={leavedModal}
+          onConfirm={(reason)=>confirmLeaved(leavedModal.id, reason)}
+          onClose={()=>setLeavedModal(null)}
         />
       )}
     </div>
