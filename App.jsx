@@ -378,85 +378,124 @@ function AddTraineeModal({ onClose, onAdd }) {
 }
 
 /* ─── Day Messages Panel ─── */
-function DayMessagesPanel({ dayMessages, setDayMessages, trainees, onClose }) {
+function DayMessagesPanel({ dayMessages, setDayMessages, onClose }) {
   const [selectedDay, setSelectedDay] = useState(1);
   const [editing, setEditing]         = useState(false);
   const [draft, setDraft]             = useState("");
-  const [copied, setCopied]           = useState(null);
+  const [copied, setCopied]           = useState(false);
 
-  const dayLabels = { 1:"Day 1 — Shopify + Videos", 2:"Day 2 — Interview", 3:"Day 3 — Chat Analysis P1", 4:"Day 4 — Chat Analysis P2", 5:"Day 5 — Shopify Theme Research", 6:"Day 6 — Branded Store Research", 7:"Day 7 — Portfolio Review", 8:"Day 8 — Final Test" };
+  const dayLabels = {
+    1:"Day 1 — Shopify + Videos",
+    2:"Day 2 — Interview",
+    3:"Day 3 — Chat Analysis P1",
+    4:"Day 4 — Chat Analysis P2",
+    5:"Day 5 — Shopify Theme Research",
+    6:"Day 6 — Branded Store Research",
+    7:"Day 7 — Portfolio Review",
+    8:"Day 8 — Final Test",
+  };
   const currentMsg = dayMessages[selectedDay] || "";
-
-  const getPersonalized = (msg, trainee) => msg.replace(/{name}/g, trainee ? trainee.name.split(" ")[0] : "{name}");
-  const handleCopy = (msg, trainee) => { navigator.clipboard.writeText(getPersonalized(msg,trainee)).then(()=>{ setCopied(trainee?trainee.id:"generic"); setTimeout(()=>setCopied(null),2000); }); };
-  const handleWhatsApp = (msg, trainee) => { const text=encodeURIComponent(getPersonalized(msg,trainee)); const number=trainee?trainee.contact.replace(/[^0-9]/g,""):""; window.open(`https://wa.me/${number}?text=${text}`,"_blank"); };
-
-  const PHASE_KEYS = ["shopifyStore","antiGravity","videosWatched","interviewPassed","chatPart1","chatPart2","shopifyTheme","brandedStore","portfolioReview","finalTest"];
-  const PHASE_DAYS_ARR = [1,1,1,2,3,4,5,6,7,8];
-  const getDayOfTrainee = (t) => { let last=0; PHASE_KEYS.forEach((k,i)=>{ if(t.phases&&t.phases[k]) last=PHASE_DAYS_ARR[i]; }); return last===0?1:last; };
-  const traineesByDay = trainees.filter(t => getDayOfTrainee(t)===selectedDay && t.status!=="Completed" && t.status!=="Dropped");
+  const handleCopy = () => { navigator.clipboard.writeText(currentMsg).then(()=>{ setCopied(true); setTimeout(()=>setCopied(false),2000); }); };
 
   return (
-    <div style={{ position:"fixed",inset:0,background:"#0009",zIndex:200,display:"flex",alignItems:"stretch",justifyContent:"flex-end" }} onClick={onClose}>
-      <div style={{ width:620,maxWidth:"96vw",background:"#fff",boxShadow:"-8px 0 48px #0003",display:"flex",flexDirection:"column",fontFamily:"'DM Sans',sans-serif" }} onClick={e=>e.stopPropagation()}>
-        <div style={{ padding:"20px 24px",borderBottom:"2px solid #e0e7ff",background:"linear-gradient(135deg,#eef2ff,#ede9fe)",display:"flex",alignItems:"center",justifyContent:"space-between" }}>
+    <div style={{ position:"fixed",inset:0,background:"#0009",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }} onClick={onClose}>
+      <div style={{ width:700,maxWidth:"96vw",maxHeight:"90vh",background:"#fff",borderRadius:20,boxShadow:"0 32px 80px #0004",display:"flex",flexDirection:"column",fontFamily:"'DM Sans',sans-serif",overflow:"hidden" }} onClick={e=>e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{ padding:"20px 24px",borderBottom:"2px solid #e0e7ff",background:"linear-gradient(135deg,#eef2ff,#ede9fe)",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0 }}>
           <div>
-            <div style={{ fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:18,color:"#1e293b" }}>📨 Day Message Templates</div>
-            <div style={{ fontSize:12,color:"#6366f1",fontWeight:600,marginTop:2 }}>Write messages per training day · Use {"{name}"} for personalization</div>
+            <div style={{ fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:18,color:"#1e293b" }}>📨 Day Messages</div>
+            <div style={{ fontSize:12,color:"#6366f1",fontWeight:600,marginTop:2 }}>Store your messages per day — click to copy</div>
           </div>
           <button onClick={onClose} style={{ width:34,height:34,borderRadius:8,border:"none",background:"#fff",cursor:"pointer",fontSize:18,color:"#64748b",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px #0001" }}>×</button>
         </div>
-        <div style={{ display:"flex",flex:1,overflow:"hidden" }}>
-          <div style={{ width:160,borderRight:"1.5px solid #e8eaf6",background:"#fafbff",overflowY:"auto",padding:"12px 8px",flexShrink:0 }}>
-            <div style={{ fontSize:10,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8,paddingLeft:8 }}>Select Day</div>
-            {[1,2,3,4,5,6,7,8].map(d => {
-              const cnt = trainees.filter(t=>getDayOfTrainee(t)===d&&t.status!=="Completed"&&t.status!=="Dropped").length;
-              return (
-                <button key={d} onClick={()=>{setSelectedDay(d);setEditing(false);}} style={{ width:"100%",textAlign:"left",padding:"10px 12px",borderRadius:9,border:"none",cursor:"pointer",marginBottom:4,background:selectedDay===d?"linear-gradient(135deg,#6366f1,#8b5cf6)":"transparent",color:selectedDay===d?"#fff":"#475569",fontWeight:selectedDay===d?700:500,fontFamily:"inherit",fontSize:13,transition:"all 0.15s" }}>
-                  <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
-                    <span>Day {d}</span>
-                    {cnt>0&&<span style={{ background:selectedDay===d?"rgba(255,255,255,0.3)":"#eef2ff",color:selectedDay===d?"#fff":"#6366f1",borderRadius:99,fontSize:10,fontWeight:700,padding:"1px 6px" }}>{cnt}</span>}
-                  </div>
+
+        {/* Day Tabs */}
+        <div style={{ display:"flex",gap:0,overflowX:"auto",borderBottom:"2px solid #e8eaf6",background:"#fafbff",padding:"0 16px",flexShrink:0 }}>
+          {[1,2,3,4,5,6,7,8].map(d => (
+            <button key={d} onClick={()=>{setSelectedDay(d);setEditing(false);setCopied(false);}} style={{
+              padding:"12px 16px",border:"none",background:"transparent",
+              borderBottom: selectedDay===d ? "3px solid #6366f1" : "3px solid transparent",
+              color: selectedDay===d ? "#6366f1" : "#94a3b8",
+              fontWeight: selectedDay===d ? 700 : 500,
+              fontSize:13,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit",
+              transition:"all 0.15s",
+            }}>
+              Day {d}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div style={{ flex:1,overflowY:"auto",padding:24 }}>
+          <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16 }}>
+            <div style={{ fontWeight:700,fontSize:16,color:"#1e293b" }}>{dayLabels[selectedDay]}</div>
+            <div style={{ display:"flex",gap:8 }}>
+              {!editing ? (
+                <button onClick={()=>{setEditing(true);setDraft(currentMsg);}} style={{ padding:"8px 18px",borderRadius:8,border:"1.5px solid #c7d2fe",background:"#eef2ff",color:"#6366f1",fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit" }}>
+                  ✏️ {currentMsg ? "Edit" : "Write"}
                 </button>
-              );
-            })}
-          </div>
-          <div style={{ flex:1,overflowY:"auto",padding:20,display:"flex",flexDirection:"column",gap:16 }}>
-            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
-              <div>
-                <div style={{ fontWeight:700,fontSize:15,color:"#1e293b" }}>{dayLabels[selectedDay]}</div>
-                <div style={{ fontSize:12,color:"#94a3b8",marginTop:2 }}>{traineesByDay.length>0?`${traineesByDay.length} active trainee(s) on this day`:"No active trainees on this day"}</div>
-              </div>
-              {!editing ? <button onClick={()=>{setEditing(true);setDraft(currentMsg);}} style={{ padding:"7px 16px",borderRadius:8,border:"1.5px solid #c7d2fe",background:"#eef2ff",color:"#6366f1",fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit" }}>✏ {currentMsg?"Edit":"Write"} Message</button>
-              : <div style={{ display:"flex",gap:8 }}><button onClick={()=>{setDayMessages(m=>({...m,[selectedDay]:draft}));setEditing(false);}} style={{ padding:"7px 16px",borderRadius:8,border:"none",background:"#22c55e",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit" }}>💾 Save</button><button onClick={()=>setEditing(false)} style={{ padding:"7px 16px",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#fff",color:"#64748b",fontWeight:600,fontSize:12,cursor:"pointer",fontFamily:"inherit" }}>Cancel</button></div>}
+              ) : (
+                <>
+                  <button onClick={()=>{setDayMessages(m=>({...m,[selectedDay]:draft}));setEditing(false);}} style={{ padding:"8px 18px",borderRadius:8,border:"none",background:"#22c55e",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit" }}>💾 Save</button>
+                  <button onClick={()=>setEditing(false)} style={{ padding:"8px 18px",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#fff",color:"#64748b",fontWeight:600,fontSize:12,cursor:"pointer",fontFamily:"inherit" }}>Cancel</button>
+                </>
+              )}
             </div>
-            <div style={{ background:"#f8faff",borderRadius:12,border:"1.5px solid #e0e7ff",overflow:"hidden" }}>
-              <div style={{ padding:"8px 14px",background:"linear-gradient(135deg,#eef2ff,#ede9fe)",borderBottom:"1px solid #e0e7ff",fontSize:11,fontWeight:700,color:"#6366f1",display:"flex",alignItems:"center",gap:6 }}>
-                💬 Message Template <span style={{ fontWeight:400,color:"#94a3b8",marginLeft:4 }}>· Use {"{name}"} to auto-personalize</span>
-              </div>
-              {editing ? <textarea value={draft} onChange={e=>setDraft(e.target.value)} rows={8} placeholder={"Write your Day "+selectedDay+" message here..."} style={{ width:"100%",padding:"14px",border:"none",fontSize:13,color:"#1e293b",outline:"none",resize:"vertical",fontFamily:"inherit",background:"#fff",boxSizing:"border-box",lineHeight:1.7 }}/>
-              : currentMsg ? <div><pre style={{ margin:0,padding:"14px",fontSize:13,color:"#374151",whiteSpace:"pre-wrap",fontFamily:"inherit",lineHeight:1.7,background:"#fff" }}>{currentMsg}</pre><div style={{ padding:"10px 14px",borderTop:"1px solid #e0e7ff" }}><button onClick={()=>handleCopy(currentMsg,null)} style={{ padding:"6px 14px",borderRadius:7,border:"1.5px solid #e2e8f0",background:"#fff",color:"#64748b",fontWeight:600,fontSize:12,cursor:"pointer",fontFamily:"inherit" }}>{copied==="generic"?"✅ Copied!":"📋 Copy Template"}</button></div></div>
-              : <div style={{ padding:24,textAlign:"center",color:"#94a3b8",fontSize:13 }}>No message written yet for Day {selectedDay}.<br/><span style={{ color:"#6366f1",fontWeight:600,cursor:"pointer" }} onClick={()=>{setEditing(true);setDraft("");}}>Click "Write Message" →</span></div>}
-            </div>
-            {currentMsg&&traineesByDay.length>0&&(
-              <div>
-                <div style={{ fontSize:13,fontWeight:700,color:"#1e293b",marginBottom:10 }}>🎯 Send to Active Trainees on Day {selectedDay}</div>
-                <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
-                  {traineesByDay.map(t=>(
-                    <div key={t.id} style={{ display:"flex",alignItems:"center",gap:12,padding:"12px 14px",borderRadius:10,border:"1.5px solid #e8eaf6",background:"#fff" }}>
-                      <div style={{ width:34,height:34,borderRadius:9,flexShrink:0,background:"linear-gradient(135deg,#eef2ff,#ede9fe)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:12,color:"#6366f1" }}>{t.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}</div>
-                      <div style={{ flex:1 }}><div style={{ fontWeight:600,fontSize:13,color:"#1e293b" }}>{t.name}</div><div style={{ fontSize:11,color:"#94a3b8" }}>{t.contact}</div></div>
-                      <div style={{ fontStyle:"italic",fontSize:12,color:"#94a3b8",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>"{getPersonalized(currentMsg,t).slice(0,40)}..."</div>
-                      <div style={{ display:"flex",gap:6,flexShrink:0 }}>
-                        <button onClick={()=>handleCopy(currentMsg,t)} style={{ padding:"5px 12px",borderRadius:7,border:"1.5px solid #e2e8f0",background:"#fff",color:"#64748b",fontWeight:600,fontSize:11,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap" }}>{copied===t.id?"✅ Copied!":"📋 Copy"}</button>
-                        <button onClick={()=>handleWhatsApp(currentMsg,t)} style={{ padding:"5px 12px",borderRadius:7,border:"none",background:"linear-gradient(135deg,#25d366,#128c7e)",color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap" }}>💬 WhatsApp</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
+
+          {editing ? (
+            <textarea
+              value={draft}
+              onChange={e=>setDraft(e.target.value)}
+              rows={12}
+              autoFocus
+              placeholder={`Write your Day ${selectedDay} message here...\n\nThis is just for you to store and copy.`}
+              style={{
+                width:"100%",padding:"16px",border:"2px solid #c7d2fe",
+                borderRadius:14,fontSize:14,color:"#1e293b",outline:"none",
+                resize:"vertical",fontFamily:"inherit",boxSizing:"border-box",
+                lineHeight:1.7,background:"#fff",
+              }}
+              onFocus={e=>e.target.style.borderColor="#6366f1"}
+              onBlur={e=>e.target.style.borderColor="#c7d2fe"}
+            />
+          ) : currentMsg ? (
+            <div style={{ background:"#f8faff",borderRadius:14,border:"1.5px solid #e0e7ff",overflow:"hidden" }}>
+              <pre style={{ margin:0,padding:"20px",fontSize:14,color:"#374151",whiteSpace:"pre-wrap",fontFamily:"inherit",lineHeight:1.8,background:"#fff",userSelect:"all" }}>
+                {currentMsg}
+              </pre>
+              <div style={{ padding:"14px 20px",borderTop:"1px solid #e0e7ff",background:"#f8faff",display:"flex",alignItems:"center",gap:12 }}>
+                <button onClick={handleCopy} style={{
+                  padding:"10px 24px",borderRadius:9,border:"none",
+                  background: copied ? "linear-gradient(135deg,#22c55e,#16a34a)" : "linear-gradient(135deg,#6366f1,#8b5cf6)",
+                  color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit",
+                  boxShadow: copied ? "0 4px 16px #22c55e33" : "0 4px 16px #6366f133",
+                  display:"flex",alignItems:"center",gap:8,
+                  transition:"all 0.2s",
+                }}>
+                  {copied ? "✅ Copied!" : "📋 Copy Message"}
+                </button>
+                <span style={{ fontSize:12,color:"#94a3b8" }}>Click to copy, then paste in WhatsApp</span>
+              </div>
+            </div>
+          ) : (
+            <div style={{
+              textAlign:"center",padding:"60px 24px",
+              background:"#fafbff",borderRadius:14,border:"2px dashed #e0e7ff",
+            }}>
+              <div style={{ fontSize:40,marginBottom:12 }}>📝</div>
+              <div style={{ fontSize:15,color:"#64748b",marginBottom:8 }}>No message saved for Day {selectedDay}</div>
+              <button onClick={()=>{setEditing(true);setDraft("");}} style={{
+                padding:"10px 24px",borderRadius:9,border:"none",
+                background:"linear-gradient(135deg,#6366f1,#8b5cf6)",
+                color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit",
+                boxShadow:"0 4px 16px #6366f133",
+              }}>
+                ✏️ Write Message
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -1151,7 +1190,7 @@ export default function TraineePortal() {
 
       {/* ── Modals ── */}
       {showAdd && <AddTraineeModal onClose={()=>setShowAdd(false)} onAdd={addTrainee}/>}
-      {showMessages && <DayMessagesPanel dayMessages={dayMessages} setDayMessages={setDayMessages} trainees={trainees} onClose={()=>setShowMessages(false)}/>}
+      {showMessages && <DayMessagesPanel dayMessages={dayMessages} setDayMessages={setDayMessages} onClose={()=>setShowMessages(false)}/>}
       {notesModal && (
         <TraineeNotesModal
           trainee={notesModal}
