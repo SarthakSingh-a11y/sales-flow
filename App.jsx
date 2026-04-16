@@ -4,6 +4,7 @@ const PHASES = [
   { key: "shopifyStore",   label: "Shopify Store Built",          day: 1, short: "Shopify",    emoji: "🛍️",  color: "#f97316", bg: "#fff7ed" },
   { key: "antiGravity",    label: "Anti-Gravity Website Built",   day: 1, short: "A-Gravity",  emoji: "🚀",  color: "#8b5cf6", bg: "#f5f3ff" },
   { key: "videosWatched",  label: "Videos Watched",               day: 1, short: "Videos",     emoji: "🎬",  color: "#ec4899", bg: "#fdf2f8" },
+  { key: "certificate",   label: "Certificate Uploaded",          day: 1, short: "Certificate",emoji: "📜",  color: "#0369a1", bg: "#f0f9ff" },
   { key: "interviewPassed",label: "Interview Passed",             day: 2, short: "Interview",  emoji: "🎤",  color: "#6366f1", bg: "#eef2ff" },
   { key: "chatPart1",      label: "Client Chat Analysis Pt.1",   day: 3, short: "Chat P1",    emoji: "💬",  color: "#0ea5e9", bg: "#f0f9ff" },
   { key: "chatPart2",      label: "Client Chat Analysis Pt.2",   day: 4, short: "Chat P2",    emoji: "📊",  color: "#06b6d4", bg: "#ecfeff" },
@@ -34,23 +35,23 @@ const INITIAL_TRAINEES = [
   { id: 1, name: "Ayesha Khan",    contact: "+91-300-1234567", status: "In Progress",       enrollDate: "2026-03-01",
     notes: "Very motivated learner. Completed Day 1 tasks ahead of schedule.",
     phaseNotes: { ...EMPTY_PHASE_NOTES, shopifyStore: "Store looks clean, good niche selection.", antiGravity: "", videosWatched: "Watched all 3 videos, shared summary." },
-    phases: { shopifyStore: true, antiGravity: true, videosWatched: true, interviewPassed: false, chatPart1: false, chatPart2: false, shopifyTheme: false, brandedStore: false, portfolioReview: false, finalTest: false } },
+    phases: { shopifyStore: true, antiGravity: true, videosWatched: true, certificate: false, interviewPassed: false, chatPart1: false, chatPart2: false, shopifyTheme: false, brandedStore: false, portfolioReview: false, finalTest: false } },
   { id: 2, name: "Bilal Ahmed",    contact: "+91-321-9876543", status: "Interview Pending", enrollDate: "2026-03-02",
     notes: "Waiting for interview slot. Has completed all Day 1 tasks.",
     phaseNotes: { ...EMPTY_PHASE_NOTES },
-    phases: { shopifyStore: true, antiGravity: true, videosWatched: true, interviewPassed: false, chatPart1: false, chatPart2: false, shopifyTheme: false, brandedStore: false, portfolioReview: false, finalTest: false } },
+    phases: { shopifyStore: true, antiGravity: true, videosWatched: true, certificate: false, interviewPassed: false, chatPart1: false, chatPart2: false, shopifyTheme: false, brandedStore: false, portfolioReview: false, finalTest: false } },
   { id: 3, name: "Sana Malik",     contact: "+91-333-5551234", status: "Selected",          enrollDate: "2026-02-20",
     notes: "Outstanding performance. Scored 94% on final test. Ready to be assigned a client.",
     phaseNotes: { ...EMPTY_PHASE_NOTES, finalTest: "Scored 94%. Excellent result!" },
-    phases: { shopifyStore: true, antiGravity: true, videosWatched: true, interviewPassed: true, chatPart1: true, chatPart2: true, shopifyTheme: true, brandedStore: true, portfolioReview: true, finalTest: true } },
+    phases: { shopifyStore: true, antiGravity: true, videosWatched: true, certificate: true, interviewPassed: true, chatPart1: true, chatPart2: true, shopifyTheme: true, brandedStore: true, portfolioReview: true, finalTest: true } },
   { id: 4, name: "Usman Tariq",    contact: "+91-345-7778889", status: "Not Started",       enrollDate: "2026-03-05",
     notes: "Just enrolled. Needs orientation call.",
     phaseNotes: { ...EMPTY_PHASE_NOTES },
-    phases: { shopifyStore: false, antiGravity: false, videosWatched: false, interviewPassed: false, chatPart1: false, chatPart2: false, shopifyTheme: false, brandedStore: false, portfolioReview: false, finalTest: false } },
+    phases: { shopifyStore: false, antiGravity: false, videosWatched: false, certificate: false, interviewPassed: false, chatPart1: false, chatPart2: false, shopifyTheme: false, brandedStore: false, portfolioReview: false, finalTest: false } },
   { id: 5, name: "Fatima Zahra",   contact: "+91-312-4445556", status: "In Progress",       enrollDate: "2026-02-28",
     notes: "Struggling with Anti-Gravity website. Needs additional support on Day 1.",
     phaseNotes: { ...EMPTY_PHASE_NOTES, antiGravity: "Stuck on DNS setup — needs guidance." },
-    phases: { shopifyStore: true, antiGravity: false, videosWatched: true, interviewPassed: false, chatPart1: false, chatPart2: false, shopifyTheme: false, brandedStore: false, portfolioReview: false, finalTest: false } },
+    phases: { shopifyStore: true, antiGravity: false, videosWatched: true, certificate: false, interviewPassed: false, chatPart1: false, chatPart2: false, shopifyTheme: false, brandedStore: false, portfolioReview: false, finalTest: false } },
   { id: 6, name: "Hamza Riaz",     contact: "+91-301-6667778", status: "Dropped",           enrollDate: "2026-02-25",
     notes: "Dropped due to personal reasons. May re-enroll next batch.",
     phaseNotes: { ...EMPTY_PHASE_NOTES },
@@ -96,9 +97,19 @@ function TraineeNotesModal({ trainee, onClose, onUpdate }) {
   const [phaseNotes, setPhaseNotes] = useState({ ...(trainee.phaseNotes || EMPTY_PHASE_NOTES) });
   const [generalNotes, setGeneralNotes] = useState(trainee.notes || "");
   const [status, setStatus] = useState(trainee.status);
+  const [certImage, setCertImage] = useState(trainee.certificateImage || "");
+  const [certText, setCertText]   = useState(trainee.certificateText || "");
+
+  const handleCertUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => setCertImage(ev.target.result);
+    reader.readAsDataURL(file);
+  };
 
   const save = () => {
-    onUpdate(trainee.id, { phases, phaseNotes, notes: generalNotes, status });
+    onUpdate(trainee.id, { phases, phaseNotes, notes: generalNotes, status, certificateImage: certImage, certificateText: certText });
     onClose();
   };
 
@@ -284,10 +295,76 @@ function TraineeNotesModal({ trainee, onClose, onUpdate }) {
                 />
               </div>
 
+              {/* Certificate upload — only on certificate tab */}
+              {activeTab === "certificate" && (
+                <div style={{ marginBottom:16 }}>
+                  <div style={{ fontWeight:700, fontSize:13, color:"#0369a1", marginBottom:10, display:"flex", alignItems:"center", gap:6 }}>
+                    <span>📜</span> Certificate Image & Details
+                  </div>
+
+                  {/* Image upload area */}
+                  <div style={{
+                    border: certImage ? "2px solid #0369a133" : "2px dashed #bae6fd",
+                    borderRadius:14, overflow:"hidden", marginBottom:14,
+                    background: certImage ? "#f0f9ff" : "#f8faff",
+                  }}>
+                    {certImage ? (
+                      <div style={{ position:"relative" }}>
+                        <img src={certImage} alt="Certificate" style={{ width:"100%", maxHeight:300, objectFit:"contain", display:"block", background:"#fff" }} />
+                        <div style={{ padding:"10px 14px", borderTop:"1px solid #e0e7ff", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                          <span style={{ fontSize:12, color:"#0369a1", fontWeight:600 }}>📎 Certificate uploaded</span>
+                          <div style={{ display:"flex", gap:8 }}>
+                            <label style={{
+                              padding:"5px 14px", borderRadius:7, border:"1.5px solid #bae6fd",
+                              background:"#f0f9ff", color:"#0369a1", fontWeight:600, fontSize:11,
+                              cursor:"pointer", fontFamily:"inherit",
+                            }}>
+                              🔄 Replace
+                              <input type="file" accept="image/*" onChange={handleCertUpload} style={{ display:"none" }} />
+                            </label>
+                            <button onClick={()=>setCertImage("")} style={{
+                              padding:"5px 14px", borderRadius:7, border:"1.5px solid #fecdd3",
+                              background:"#fff1f2", color:"#be123c", fontWeight:600, fontSize:11,
+                              cursor:"pointer", fontFamily:"inherit",
+                            }}>🗑 Remove</button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <label style={{
+                        display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+                        padding:"36px 20px", cursor:"pointer", gap:10,
+                      }}>
+                        <div style={{ fontSize:40 }}>📷</div>
+                        <div style={{ fontSize:14, fontWeight:600, color:"#0369a1" }}>Click to upload certificate image</div>
+                        <div style={{ fontSize:12, color:"#94a3b8" }}>JPG, PNG, or any image format</div>
+                        <input type="file" accept="image/*" onChange={handleCertUpload} style={{ display:"none" }} />
+                      </label>
+                    )}
+                  </div>
+
+                  {/* Certificate text notes */}
+                  <div style={{ fontWeight:600, fontSize:12, color:"#475569", marginBottom:6 }}>📝 Certificate Details / Notes</div>
+                  <textarea
+                    value={certText}
+                    onChange={e => setCertText(e.target.value)}
+                    rows={3}
+                    placeholder="e.g. Certificate ID, issuing organization, date, any remarks..."
+                    style={{
+                      width:"100%", padding:"12px",
+                      border:"1.5px solid #bae6fd",
+                      borderRadius:10, fontSize:13, color:"#1e293b", outline:"none",
+                      resize:"vertical", fontFamily:"inherit", boxSizing:"border-box",
+                      lineHeight:1.6, background:"#fff",
+                    }}
+                  />
+                </div>
+              )}
+
               {/* Quick nav: all phases mini grid */}
               <div style={{ marginTop:20 }}>
                 <div style={{ fontSize:12, fontWeight:700, color:"#94a3b8", marginBottom:10, textTransform:"uppercase", letterSpacing:"0.05em" }}>All Phases Overview</div>
-                <div style={{ display:"grid", gridTemplateColumns:"repeat(5, 1fr)", gap:8 }}>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(6, 1fr)", gap:8 }}>
                   {PHASES.map(p => {
                     const done = phases[p.key];
                     const hasRemark = !!(phaseNotes[p.key]?.trim());
@@ -593,7 +670,12 @@ export default function TraineePortal() {
       if (s) {
         // Migrate +92 → +91 if old data exists
         const parsed = JSON.parse(s.replace(/\+92/g, "+91"));
-        return parsed;
+        // Migrate: add certificate phase if missing
+        return parsed.map(t => ({
+          ...t,
+          phases: { certificate: false, ...t.phases },
+          phaseNotes: { certificate: "", ...(t.phaseNotes || {}) },
+        }));
       }
       return INITIAL_TRAINEES;
     } catch { return INITIAL_TRAINEES; }
@@ -788,7 +870,7 @@ export default function TraineePortal() {
         {/* ── Table ── */}
         <div style={{ background:"#fff",borderRadius:18,border:"1.5px solid #e8eaf6",overflow:"hidden",boxShadow:"0 4px 24px #0000080a" }}>
           {/* Header */}
-          <div style={{ display:"grid",gridTemplateColumns:"40px 2fr 1.6fr 100px 90px repeat(10,64px)",padding:"12px 20px",background:"linear-gradient(135deg,#f8faff,#f0f4ff)",borderBottom:"2px solid #e8eaf6",gap:8,alignItems:"center" }}>
+          <div style={{ display:"grid",gridTemplateColumns:"40px 2fr 1.6fr 100px 90px repeat(11,64px)",padding:"12px 20px",background:"linear-gradient(135deg,#f8faff,#f0f4ff)",borderBottom:"2px solid #e8eaf6",gap:8,alignItems:"center" }}>
             <div style={{ display:"flex",alignItems:"center",justifyContent:"center" }}>
               <input type="checkbox"
                 checked={activeTrainees.length>0 && activeTrainees.every(t=>selectedRows.has(t.id))}
@@ -818,7 +900,7 @@ export default function TraineePortal() {
 
             return (
               <div key={trainee.id} style={{
-                display:"grid", gridTemplateColumns:"40px 2fr 1.6fr 100px 90px repeat(10,64px)",
+                display:"grid", gridTemplateColumns:"40px 2fr 1.6fr 100px 90px repeat(11,64px)",
                 padding:"13px 20px", gap:8, alignItems:"center",
                 background:rowBg,
                 borderLeft: overdue ? "4px solid #ef4444" : "4px solid transparent",
@@ -936,7 +1018,7 @@ export default function TraineePortal() {
 
             {showSelected && (
               <div style={{ background:"#fff", borderRadius:"0 0 18px 18px", border:"1.5px solid #99f6e4", borderTop:"none", overflow:"hidden", boxShadow:"0 4px 24px #0000080a" }}>
-                <div style={{ display:"grid",gridTemplateColumns:"2fr 1.4fr 130px 90px repeat(10,64px)",padding:"12px 20px",background:"linear-gradient(135deg,#f0fdfa,#ecfdf5)",borderBottom:"2px solid #d1fae5",gap:8,alignItems:"center" }}>
+                <div style={{ display:"grid",gridTemplateColumns:"2fr 1.4fr 130px 90px repeat(11,64px)",padding:"12px 20px",background:"linear-gradient(135deg,#f0fdfa,#ecfdf5)",borderBottom:"2px solid #d1fae5",gap:8,alignItems:"center" }}>
                   <div style={thStyle}>Trainee Name</div>
                   <div style={thStyle}>Contact</div>
                   <div style={{ ...thStyle, textAlign:"center" }}>Change Status</div>
@@ -947,7 +1029,7 @@ export default function TraineePortal() {
                   const completedCount = getCompletedCount(trainee.phases);
                   return (
                     <div key={trainee.id} style={{
-                      display:"grid", gridTemplateColumns:"2fr 1.4fr 130px 90px repeat(10,64px)",
+                      display:"grid", gridTemplateColumns:"2fr 1.4fr 130px 90px repeat(11,64px)",
                       padding:"13px 20px", gap:8, alignItems:"center",
                       background: idx%2===0 ? "#fff" : "#f0fdfa",
                       borderBottom:"1px solid #f1f5f9",
@@ -1027,7 +1109,7 @@ export default function TraineePortal() {
 
             {showNotSelected && (
               <div style={{ background:"#fff", borderRadius:"0 0 18px 18px", border:"1.5px solid #fcd34d", borderTop:"none", overflow:"hidden", boxShadow:"0 4px 24px #0000080a" }}>
-                <div style={{ display:"grid",gridTemplateColumns:"2fr 1.4fr 130px 90px repeat(10,64px)",padding:"12px 20px",background:"linear-gradient(135deg,#fffbeb,#fef3c7)",borderBottom:"2px solid #fde68a",gap:8,alignItems:"center" }}>
+                <div style={{ display:"grid",gridTemplateColumns:"2fr 1.4fr 130px 90px repeat(11,64px)",padding:"12px 20px",background:"linear-gradient(135deg,#fffbeb,#fef3c7)",borderBottom:"2px solid #fde68a",gap:8,alignItems:"center" }}>
                   <div style={thStyle}>Trainee Name</div>
                   <div style={thStyle}>Contact</div>
                   <div style={{ ...thStyle, textAlign:"center" }}>Change Status</div>
@@ -1038,7 +1120,7 @@ export default function TraineePortal() {
                   const completedCount = getCompletedCount(trainee.phases);
                   return (
                     <div key={trainee.id} style={{
-                      display:"grid", gridTemplateColumns:"2fr 1.4fr 130px 90px repeat(10,64px)",
+                      display:"grid", gridTemplateColumns:"2fr 1.4fr 130px 90px repeat(11,64px)",
                       padding:"13px 20px", gap:8, alignItems:"center",
                       background: idx%2===0 ? "#fff" : "#fffbeb",
                       borderBottom:"1px solid #f1f5f9",
@@ -1118,7 +1200,7 @@ export default function TraineePortal() {
 
             {showLeaved && (
               <div style={{ background:"#fff", borderRadius:"0 0 18px 18px", border:"1.5px solid #fecdd3", borderTop:"none", overflow:"hidden", boxShadow:"0 4px 24px #0000080a" }}>
-                <div style={{ display:"grid",gridTemplateColumns:"2fr 1.4fr 1.5fr 130px 90px repeat(10,64px)",padding:"12px 20px",background:"linear-gradient(135deg,#fff1f2,#ffe4e6)",borderBottom:"2px solid #fecdd3",gap:8,alignItems:"center" }}>
+                <div style={{ display:"grid",gridTemplateColumns:"2fr 1.4fr 1.5fr 130px 90px repeat(11,64px)",padding:"12px 20px",background:"linear-gradient(135deg,#fff1f2,#ffe4e6)",borderBottom:"2px solid #fecdd3",gap:8,alignItems:"center" }}>
                   <div style={thStyle}>Trainee Name</div>
                   <div style={thStyle}>Contact</div>
                   <div style={thStyle}>Reason</div>
@@ -1131,7 +1213,7 @@ export default function TraineePortal() {
                   const currentDay = getPhaseDay(trainee.phases);
                   return (
                     <div key={trainee.id} style={{
-                      display:"grid", gridTemplateColumns:"2fr 1.4fr 1.5fr 130px 90px repeat(10,64px)",
+                      display:"grid", gridTemplateColumns:"2fr 1.4fr 1.5fr 130px 90px repeat(11,64px)",
                       padding:"13px 20px", gap:8, alignItems:"center",
                       background: idx%2===0 ? "#fff" : "#fff1f2",
                       borderBottom:"1px solid #f1f5f9",
