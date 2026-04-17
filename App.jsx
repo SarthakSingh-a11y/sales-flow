@@ -456,12 +456,13 @@ function AddTraineeModal({ onClose, onAdd }) {
 
 /* ─── Day Messages Panel ─── */
 function DayMessagesPanel({ dayMessages, setDayMessages, onClose }) {
-  const [selectedDay, setSelectedDay] = useState(1);
+  const [selectedDay, setSelectedDay] = useState("intro");
   const [editing, setEditing]         = useState(false);
   const [draft, setDraft]             = useState("");
   const [copied, setCopied]           = useState(false);
 
   const dayLabels = {
+    intro:"Introduction",
     1:"Day 1 — Shopify + Videos",
     2:"Day 2 — Interview",
     3:"Day 3 — Chat Analysis P1",
@@ -489,7 +490,7 @@ function DayMessagesPanel({ dayMessages, setDayMessages, onClose }) {
 
         {/* Day Tabs */}
         <div style={{ display:"flex",gap:0,overflowX:"auto",borderBottom:"2px solid #e8eaf6",background:"#fafbff",padding:"0 16px",flexShrink:0 }}>
-          {[1,2,3,4,5,6,7,8].map(d => (
+          {["intro",1,2,3,4,5,6,7,8].map(d => (
             <button key={d} onClick={()=>{setSelectedDay(d);setEditing(false);setCopied(false);}} style={{
               padding:"12px 16px",border:"none",background:"transparent",
               borderBottom: selectedDay===d ? "3px solid #6366f1" : "3px solid transparent",
@@ -498,7 +499,7 @@ function DayMessagesPanel({ dayMessages, setDayMessages, onClose }) {
               fontSize:13,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit",
               transition:"all 0.15s",
             }}>
-              Day {d}
+              {d === "intro" ? "✨ Intro" : `Day ${d}`}
             </button>
           ))}
         </div>
@@ -697,6 +698,7 @@ export default function TraineePortal() {
   const [dayMessages,    setDayMessages]    = useState(() => {
     try { const s=localStorage.getItem("trainee_day_messages"); if(s) return JSON.parse(s); } catch {}
     return {
+      intro:"Hi {name}! 👋 Welcome to the DMH Sales Training Program!\n\nWe're excited to have you on board. Here's a quick intro to what the program looks like:\n\n📌 This is a structured 8-day training.\n✅ Each day has specific tasks you need to complete.\n💬 I'll be messaging you daily with your tasks.\n🔓 Each phase unlocks after the previous one is done.\n\nGet ready — let's build something great together! 🚀",
       1:"Hi {name}! 👋 Welcome to Day 1 of the Sales Training Program. Today your tasks are:\n1️⃣ Build your Shopify Store\n2️⃣ Build your Anti-Gravity Website\n3️⃣ Watch the Day 1 Videos\n\nLet me know once done! 💪",
       2:"Hi {name}! 🎤 It's Day 2 — Interview Day!\n\nYour interview is scheduled. Please be prepared and confident. We believe in you!\n\nAll the best! 🌟",
       3:"Hi {name}! 📊 Day 3 — Client Chat Analysis Part 1.\n\nStudy the provided client chat examples carefully. Note the tone, language, and approach used.\n\nShare your analysis when ready! ✅",
