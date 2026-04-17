@@ -510,9 +510,22 @@ function DayMessagesPanel({ dayMessages, setDayMessages, onClose }) {
             <div style={{ fontWeight:700,fontSize:16,color:"#1e293b" }}>{dayLabels[selectedDay]}</div>
             <div style={{ display:"flex",gap:8 }}>
               {!editing ? (
-                <button onClick={()=>{setEditing(true);setDraft(currentMsg);}} style={{ padding:"8px 18px",borderRadius:8,border:"1.5px solid #c7d2fe",background:"#eef2ff",color:"#6366f1",fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit" }}>
-                  ✏️ {currentMsg ? "Edit" : "Write"}
-                </button>
+                <>
+                  {currentMsg && (
+                    <button onClick={handleCopy} style={{
+                      padding:"8px 18px",borderRadius:8,border:"none",
+                      background: copied ? "linear-gradient(135deg,#22c55e,#16a34a)" : "linear-gradient(135deg,#6366f1,#8b5cf6)",
+                      color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit",
+                      boxShadow: copied ? "0 4px 12px #22c55e33" : "0 4px 12px #6366f133",
+                      transition:"all 0.2s",
+                    }}>
+                      {copied ? "✅ Copied!" : "📋 Copy"}
+                    </button>
+                  )}
+                  <button onClick={()=>{setEditing(true);setDraft(currentMsg);}} style={{ padding:"8px 18px",borderRadius:8,border:"1.5px solid #c7d2fe",background:"#eef2ff",color:"#6366f1",fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit" }}>
+                    ✏️ {currentMsg ? "Edit" : "Write"}
+                  </button>
+                </>
               ) : (
                 <>
                   <button onClick={()=>{setDayMessages(m=>({...m,[selectedDay]:draft}));setEditing(false);}} style={{ padding:"8px 18px",borderRadius:8,border:"none",background:"#22c55e",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit" }}>💾 Save</button>
@@ -543,19 +556,6 @@ function DayMessagesPanel({ dayMessages, setDayMessages, onClose }) {
               <pre style={{ margin:0,padding:"20px",fontSize:14,color:"#374151",whiteSpace:"pre-wrap",fontFamily:"inherit",lineHeight:1.8,background:"#fff",userSelect:"all" }}>
                 {currentMsg}
               </pre>
-              <div style={{ padding:"14px 20px",borderTop:"1px solid #e0e7ff",background:"#f8faff",display:"flex",alignItems:"center",gap:12 }}>
-                <button onClick={handleCopy} style={{
-                  padding:"10px 24px",borderRadius:9,border:"none",
-                  background: copied ? "linear-gradient(135deg,#22c55e,#16a34a)" : "linear-gradient(135deg,#6366f1,#8b5cf6)",
-                  color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit",
-                  boxShadow: copied ? "0 4px 16px #22c55e33" : "0 4px 16px #6366f133",
-                  display:"flex",alignItems:"center",gap:8,
-                  transition:"all 0.2s",
-                }}>
-                  {copied ? "✅ Copied!" : "📋 Copy Message"}
-                </button>
-                <span style={{ fontSize:12,color:"#94a3b8" }}>Click to copy, then paste in WhatsApp</span>
-              </div>
             </div>
           ) : (
             <div style={{
