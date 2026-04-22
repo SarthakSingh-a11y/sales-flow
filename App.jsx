@@ -723,9 +723,23 @@ export default function TraineePortal() {
             leavedDate:   t.leaved_date   || "",
           })));
         } else {
-          // First time — seed with initial data
-          setTrainees(INITIAL_TRAINEES);
-          await Promise.all(INITIAL_TRAINEES.map(t => supabase.from("trainees").upsert(traineeToRow(t))));
+          // Supabase is empty — try to restore from localStorage first
+          let seedData = INITIAL_TRAINEES;
+          try {
+            const ls = localStorage.getItem("trainee_portal_data");
+            if (ls) {
+              const parsed = JSON.parse(ls.replace(/\+92/g, "+91"));
+              if (parsed && parsed.length > 0) {
+                seedData = parsed.map(t => ({
+                  ...t,
+                  phases:     { certificate: false, ...t.phases },
+                  phaseNotes: { certificate: "", ...(t.phaseNotes || {}) },
+                }));
+              }
+            }
+          } catch {}
+          setTrainees(seedData);
+          await Promise.all(seedData.map(t => supabase.from("trainees").upsert(traineeToRow(t))));
         }
 
         if (mData && mData.length > 0) {
@@ -733,8 +747,17 @@ export default function TraineePortal() {
           mData.forEach(r => { msgs[r.day_key] = r.message; });
           setDayMessages(prev => ({ ...DEFAULT_MESSAGES, ...msgs }));
         } else {
-          // Seed default messages
-          await Promise.all(Object.entries(DEFAULT_MESSAGES).map(([k, v]) =>
+          // Try localStorage messages first
+          let seedMsgs = DEFAULT_MESSAGES;
+          try {
+            const ls = localStorage.getItem("trainee_day_messages");
+            if (ls) {
+              const parsed = JSON.parse(ls);
+              if (parsed) seedMsgs = { ...DEFAULT_MESSAGES, ...parsed };
+            }
+          } catch {}
+          setDayMessages(seedMsgs);
+          await Promise.all(Object.entries(seedMsgs).map(([k, v]) =>
             supabase.from("day_messages").upsert({ day_key: String(k), message: v })
           ));
         }
