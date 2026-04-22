@@ -1,4 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
+import { createClient } from "@supabase/supabase-js";
+
+const SUPABASE_URL = "https://qjfkrmnchhxgqaduxjszz.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFqZmtybW5jaHhncWFkdXhqc3p6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4NjY2ODAsImV4cCI6MjA5MjQ0MjY4MH0.lXCArles7bR6-HzeKZ12Avkk-ZuxdBMTWzr4eaAuMCU";
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const PHASES = [
   { key: "shopifyStore",   label: "Shopify Store Built",          day: 1, short: "Shopify",    emoji: "🛍️",  color: "#f97316", bg: "#fff7ed" },
@@ -667,22 +672,8 @@ const thStyle = { fontSize:11, fontWeight:700, color:"#64748b", textTransform:"u
 
 /* ═══════════════════════════════ MAIN PORTAL ═══════════════════════════════ */
 export default function TraineePortal() {
-  const [trainees, setTrainees] = useState(() => {
-    try {
-      const s = localStorage.getItem("trainee_portal_data");
-      if (s) {
-        // Migrate +92 → +91 if old data exists
-        const parsed = JSON.parse(s.replace(/\+92/g, "+91"));
-        // Migrate: add certificate phase if missing
-        return parsed.map(t => ({
-          ...t,
-          phases: { certificate: false, ...t.phases },
-          phaseNotes: { certificate: "", ...(t.phaseNotes || {}) },
-        }));
-      }
-      return INITIAL_TRAINEES;
-    } catch { return INITIAL_TRAINEES; }
-  });
+  const [trainees, setTrainees]   = useState([]);
+  const [dbLoading, setDbLoading] = useState(true);
   const [showAdd,        setShowAdd]        = useState(false);
   const [showMessages,   setShowMessages]   = useState(false);
   const [notesModal,     setNotesModal]     = useState(null);   // trainee object
@@ -697,23 +688,99 @@ export default function TraineePortal() {
   const [showNotSelected,  setShowNotSelected]  = useState(false);
   const [showLeaved,       setShowLeaved]       = useState(false);
   const [leavedModal,      setLeavedModal]      = useState(null); // { id, name } — trainee being moved to Leaved
-  const [dayMessages,    setDayMessages]    = useState(() => {
-    try { const s=localStorage.getItem("trainee_day_messages"); if(s) return JSON.parse(s); } catch {}
-    return {
-      intro:"Hi {name}! 👋 Welcome to the DMH Sales Training Program!\n\nWe're excited to have you on board. Here's a quick intro to what the program looks like:\n\n📌 This is a structured 8-day training.\n✅ Each day has specific tasks you need to complete.\n💬 I'll be messaging you daily with your tasks.\n🔓 Each phase unlocks after the previous one is done.\n\nGet ready — let's build something great together! 🚀",
-      1:"Hi {name}! 👋 Welcome to Day 1 of the Sales Training Program. Today your tasks are:\n1️⃣ Build your Shopify Store\n2️⃣ Build your Anti-Gravity Website\n3️⃣ Watch the Day 1 Videos\n\nLet me know once done! 💪",
-      2:"Hi {name}! 🎤 It's Day 2 — Interview Day!\n\nYour interview is scheduled. Please be prepared and confident. We believe in you!\n\nAll the best! 🌟",
-      3:"Hi {name}! 📊 Day 3 — Client Chat Analysis Part 1.\n\nStudy the provided client chat examples carefully. Note the tone, language, and approach used.\n\nShare your analysis when ready! ✅",
-      4:"Hi {name}! 💬 Day 4 — Client Chat Analysis Part 2.\n\nComplete the second part of the chat analysis and submit your findings.\n\nYou are doing great! 🔥",
-      5:"Hi {name}! 🛍️ Day 5 — Shopify Theme Research.\n\nResearch and document the best Shopify themes for different niches.\n\nSend your research report today! 📋",
-      6:"Hi {name}! 🏷️ Day 6 — Branded Store Research.\n\nAnalyze 3 successful branded Shopify stores.\n\nLooking forward to your report! 🚀",
-      7:"Hi {name}! 🖼️ Day 7 — Portfolio Store Review.\n\nReview your portfolio store and make any final improvements.\n\nShare the link when done! 🔗",
-      8:"Hi {name}! 🏆 Final Test Time!\n\nYou need to score 80%+ to pass. Take your time and trust your training.\n\nGood luck! 🎯",
+  const DEFAULT_MESSAGES = {
+    intro:"Hi {name}! 👋 Welcome to the DMH Sales Training Program!\n\nWe're excited to have you on board. Here's a quick intro to what the program looks like:\n\n📌 This is a structured 8-day training.\n✅ Each day has specific tasks you need to complete.\n💬 I'll be messaging you daily with your tasks.\n🔓 Each phase unlocks after the previous one is done.\n\nGet ready — let's build something great together! 🚀",
+    1:"Hi {name}! 👋 Welcome to Day 1 of the Sales Training Program. Today your tasks are:\n1️⃣ Build your Shopify Store\n2️⃣ Build your Anti-Gravity Website\n3️⃣ Watch the Day 1 Videos\n\nLet me know once done! 💪",
+    2:"Hi {name}! 🎤 It's Day 2 — Interview Day!\n\nYour interview is scheduled. Please be prepared and confident. We believe in you!\n\nAll the best! 🌟",
+    3:"Hi {name}! 📊 Day 3 — Client Chat Analysis Part 1.\n\nStudy the provided client chat examples carefully. Note the tone, language, and approach used.\n\nShare your analysis when ready! ✅",
+    4:"Hi {name}! 💬 Day 4 — Client Chat Analysis Part 2.\n\nComplete the second part of the chat analysis and submit your findings.\n\nYou are doing great! 🔥",
+    5:"Hi {name}! 🛍️ Day 5 — Shopify Theme Research.\n\nResearch and document the best Shopify themes for different niches.\n\nSend your research report today! 📋",
+    7:"Hi {name}! 🖼️ Day 7 — Portfolio Store Review.\n\nReview your portfolio store and make any final improvements.\n\nShare the link when done! 🔗",
+    8:"Hi {name}! 🏆 Final Test Time!\n\nYou need to score 80%+ to pass. Take your time and trust your training.\n\nGood luck! 🎯",
+  };
+  const [dayMessages, setDayMessages] = useState(DEFAULT_MESSAGES);
+
+  // ── Load data from Supabase on mount ──
+  useEffect(() => {
+    const load = async () => {
+      setDbLoading(true);
+      try {
+        const [{ data: tData }, { data: mData }] = await Promise.all([
+          supabase.from("trainees").select("*").order("created_at", { ascending: true }),
+          supabase.from("day_messages").select("*"),
+        ]);
+
+        if (tData && tData.length > 0) {
+          setTrainees(tData.map(t => ({
+            ...t,
+            phases:     { certificate: false, ...t.phases },
+            phaseNotes: { certificate: "", ...(t.phase_notes || {}) },
+            phaseNotes: t.phase_notes || {},
+            notes:      t.notes || "",
+            certificateImage: t.certificate_image || "",
+            certificateText:  t.certificate_text  || "",
+            leavedReason: t.leaved_reason || "",
+            leavedDate:   t.leaved_date   || "",
+          })));
+        } else {
+          // First time — seed with initial data
+          setTrainees(INITIAL_TRAINEES);
+          await Promise.all(INITIAL_TRAINEES.map(t => supabase.from("trainees").upsert(traineeToRow(t))));
+        }
+
+        if (mData && mData.length > 0) {
+          const msgs = {};
+          mData.forEach(r => { msgs[r.day_key] = r.message; });
+          setDayMessages(prev => ({ ...DEFAULT_MESSAGES, ...msgs }));
+        } else {
+          // Seed default messages
+          await Promise.all(Object.entries(DEFAULT_MESSAGES).map(([k, v]) =>
+            supabase.from("day_messages").upsert({ day_key: String(k), message: v })
+          ));
+        }
+      } catch (e) { console.error("Supabase load error:", e); }
+      setDbLoading(false);
     };
+    load();
+  }, []);
+
+  // ── Helper: convert trainee object → DB row ──
+  const traineeToRow = (t) => ({
+    id:                t.id,
+    name:              t.name,
+    contact:           t.contact,
+    status:            t.status,
+    enroll_date:       t.enrollDate,
+    notes:             t.notes || "",
+    phases:            t.phases || {},
+    phase_notes:       t.phaseNotes || {},
+    certificate_image: t.certificateImage || "",
+    certificate_text:  t.certificateText  || "",
+    leaved_reason:     t.leavedReason || "",
+    leaved_date:       t.leavedDate   || "",
   });
 
-  useEffect(() => { try { localStorage.setItem("trainee_portal_data",JSON.stringify(trainees)); } catch {} }, [trainees]);
-  useEffect(() => { try { localStorage.setItem("trainee_day_messages",JSON.stringify(dayMessages)); } catch {} }, [dayMessages]);
+  // ── Sync trainees to Supabase whenever they change ──
+  useEffect(() => {
+    if (dbLoading || trainees.length === 0) return;
+    const sync = async () => {
+      await supabase.from("trainees").upsert(trainees.map(traineeToRow));
+    };
+    const timer = setTimeout(sync, 600); // debounce 600ms
+    return () => clearTimeout(timer);
+  }, [trainees, dbLoading]);
+
+  // ── Sync day messages to Supabase ──
+  useEffect(() => {
+    if (dbLoading) return;
+    const sync = async () => {
+      await Promise.all(Object.entries(dayMessages).map(([k, v]) =>
+        supabase.from("day_messages").upsert({ day_key: String(k), message: v })
+      ));
+    };
+    const timer = setTimeout(sync, 600);
+    return () => clearTimeout(timer);
+  }, [dayMessages, dbLoading]);
 
   const stats = useMemo(() => {
     const c={total:trainees.length}; STATUSES.forEach(s=>{c[s]=trainees.filter(t=>t.status===s).length;}); return c;
@@ -745,8 +812,8 @@ export default function TraineePortal() {
     return { ...t, phases: newPhases, status: newStatus };
   }));
   const addTrainee     = (data) => setTrainees(ts => [...ts, {...data, id:Date.now()}]);
-  const deleteTrainee  = (id)  => { setTrainees(ts=>ts.filter(t=>t.id!==id)); setDeleteConfirm(null); };
-  const bulkDelete     = ()    => { setTrainees(ts=>ts.filter(t=>!selectedRows.has(t.id))); setSelectedRows(new Set()); setBulkDeleteConfirm(false); };
+  const deleteTrainee  = (id)  => { setTrainees(ts=>ts.filter(t=>t.id!==id)); setDeleteConfirm(null); supabase.from("trainees").delete().eq("id", id); };
+  const bulkDelete     = ()    => { const ids=[...selectedRows]; setTrainees(ts=>ts.filter(t=>!selectedRows.has(t.id))); setSelectedRows(new Set()); setBulkDeleteConfirm(false); supabase.from("trainees").delete().in("id", ids); };
   const updateTrainee  = (id, updates) => setTrainees(ts => ts.map(t => {
     if (t.id !== id) return t;
     const merged = { ...t, ...updates };
@@ -772,6 +839,16 @@ export default function TraineePortal() {
 
   const uniqueNames = ["All", ...trainees.map(t=>t.name)];
   const uniqueDays  = ["All", ...Array.from(new Set(PHASES.map(p=>`Day ${p.day}`))).sort()];
+
+  if (dbLoading) return (
+    <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", background:"linear-gradient(160deg,#f8faff 0%,#f0f4ff 50%,#faf5ff 100%)", fontFamily:"'DM Sans',sans-serif", gap:16 }}>
+      <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+      <div style={{ width:48,height:48,borderRadius:"50%",border:"4px solid #e0e7ff",borderTop:"4px solid #6366f1",animation:"spin 0.8s linear infinite" }}/>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      <div style={{ fontFamily:"'Sora',sans-serif",fontWeight:700,fontSize:18,color:"#6366f1" }}>TrainFlow Pro</div>
+      <div style={{ fontSize:13,color:"#94a3b8" }}>Loading your data...</div>
+    </div>
+  );
 
   return (
     <div style={{ minHeight:"100vh", background:"linear-gradient(160deg,#f8faff 0%,#f0f4ff 50%,#faf5ff 100%)", fontFamily:"'DM Sans','Segoe UI',sans-serif" }}>
