@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-const SUPABASE_URL = "https://qjfkrmnchhxgqaduxjszz.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFqZmtybW5jaHhncWFkdXhqc3p6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4NjY2ODAsImV4cCI6MjA5MjQ0MjY4MH0.lXCArles7bR6-HzeKZ12Avkk-ZuxdBMTWzr4eaAuMCU";
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
+);
 
 const PHASES = [
   { key: "shopifyStore",   label: "Shopify Store Built",          day: 1, short: "Shopify",    emoji: "🛍️",  color: "#f97316", bg: "#fff7ed" },
@@ -37,30 +38,27 @@ const EMPTY_PHASES     = Object.fromEntries(PHASES.map(p => [p.key, false]));
 const EMPTY_PHASE_NOTES = Object.fromEntries(PHASES.map(p => [p.key, ""]));
 
 const INITIAL_TRAINEES = [
-  { id: 1, name: "Ayesha Khan",    contact: "+91-300-1234567", status: "In Progress",       enrollDate: "2026-03-01",
-    notes: "Very motivated learner. Completed Day 1 tasks ahead of schedule.",
-    phaseNotes: { ...EMPTY_PHASE_NOTES, shopifyStore: "Store looks clean, good niche selection.", antiGravity: "", videosWatched: "Watched all 3 videos, shared summary." },
-    phases: { shopifyStore: true, antiGravity: true, videosWatched: true, certificate: false, interviewPassed: false, chatPart1: false, chatPart2: false, shopifyTheme: false, brandedStore: false, portfolioReview: false, finalTest: false } },
-  { id: 2, name: "Bilal Ahmed",    contact: "+91-321-9876543", status: "Interview Pending", enrollDate: "2026-03-02",
-    notes: "Waiting for interview slot. Has completed all Day 1 tasks.",
-    phaseNotes: { ...EMPTY_PHASE_NOTES },
-    phases: { shopifyStore: true, antiGravity: true, videosWatched: true, certificate: false, interviewPassed: false, chatPart1: false, chatPart2: false, shopifyTheme: false, brandedStore: false, portfolioReview: false, finalTest: false } },
-  { id: 3, name: "Sana Malik",     contact: "+91-333-5551234", status: "Selected",          enrollDate: "2026-02-20",
-    notes: "Outstanding performance. Scored 94% on final test. Ready to be assigned a client.",
-    phaseNotes: { ...EMPTY_PHASE_NOTES, finalTest: "Scored 94%. Excellent result!" },
-    phases: { shopifyStore: true, antiGravity: true, videosWatched: true, certificate: true, interviewPassed: true, chatPart1: true, chatPart2: true, shopifyTheme: true, brandedStore: true, portfolioReview: true, finalTest: true } },
-  { id: 4, name: "Usman Tariq",    contact: "+91-345-7778889", status: "Not Started",       enrollDate: "2026-03-05",
-    notes: "Just enrolled. Needs orientation call.",
-    phaseNotes: { ...EMPTY_PHASE_NOTES },
-    phases: { shopifyStore: false, antiGravity: false, videosWatched: false, certificate: false, interviewPassed: false, chatPart1: false, chatPart2: false, shopifyTheme: false, brandedStore: false, portfolioReview: false, finalTest: false } },
-  { id: 5, name: "Fatima Zahra",   contact: "+91-312-4445556", status: "In Progress",       enrollDate: "2026-02-28",
-    notes: "Struggling with Anti-Gravity website. Needs additional support on Day 1.",
-    phaseNotes: { ...EMPTY_PHASE_NOTES, antiGravity: "Stuck on DNS setup — needs guidance." },
-    phases: { shopifyStore: true, antiGravity: false, videosWatched: true, certificate: false, interviewPassed: false, chatPart1: false, chatPart2: false, shopifyTheme: false, brandedStore: false, portfolioReview: false, finalTest: false } },
-  { id: 6, name: "Hamza Riaz",     contact: "+91-301-6667778", status: "Dropped",           enrollDate: "2026-02-25",
-    notes: "Dropped due to personal reasons. May re-enroll next batch.",
-    phaseNotes: { ...EMPTY_PHASE_NOTES },
-    phases: { shopifyStore: true, antiGravity: false, videosWatched: false, interviewPassed: false, chatPart1: false, chatPart2: false, shopifyTheme: false, brandedStore: false, portfolioReview: false, finalTest: false } },
+  { id: 1, name: "Akansha",               contact: "+91 7491041071", status: "In Progress",  enrollDate: "2026-04-01",
+    notes: "", phaseNotes: { ...EMPTY_PHASE_NOTES },
+    phases: { shopifyStore: true,  antiGravity: true,  videosWatched: true,  certificate: false, interviewPassed: true,  chatPart1: true,  chatPart2: true,  shopifyTheme: true,  brandedStore: true,  portfolioReview: true,  finalTest: false } },
+  { id: 2, name: "Harsh",                 contact: "+91 8887927075", status: "Not Started",  enrollDate: "2026-04-01",
+    notes: "", phaseNotes: { ...EMPTY_PHASE_NOTES },
+    phases: { shopifyStore: true,  antiGravity: true,  videosWatched: true,  certificate: true,  interviewPassed: true,  chatPart1: true,  chatPart2: true,  shopifyTheme: true,  brandedStore: true,  portfolioReview: true,  finalTest: false } },
+  { id: 3, name: "Tushar Vijay Paidlewar",contact: "+91 9156231077", status: "Not Started",  enrollDate: "2026-04-01",
+    notes: "", phaseNotes: { ...EMPTY_PHASE_NOTES },
+    phases: { shopifyStore: true,  antiGravity: true,  videosWatched: true,  certificate: false, interviewPassed: true,  chatPart1: true,  chatPart2: true,  shopifyTheme: true,  brandedStore: true,  portfolioReview: true,  finalTest: false } },
+  { id: 4, name: "Kartik Verma",          contact: "+91 8449725011", status: "Not Started",  enrollDate: "2026-04-01",
+    notes: "", phaseNotes: { ...EMPTY_PHASE_NOTES },
+    phases: { shopifyStore: true,  antiGravity: true,  videosWatched: true,  certificate: false, interviewPassed: true,  chatPart1: true,  chatPart2: true,  shopifyTheme: true,  brandedStore: true,  portfolioReview: true,  finalTest: false } },
+  { id: 5, name: "Nitya Soni",            contact: "+91 7017835868", status: "Not Started",  enrollDate: "2026-04-01",
+    notes: "", phaseNotes: { ...EMPTY_PHASE_NOTES },
+    phases: { shopifyStore: true,  antiGravity: true,  videosWatched: true,  certificate: false, interviewPassed: false, chatPart1: false, chatPart2: false, shopifyTheme: false, brandedStore: false, portfolioReview: false, finalTest: false } },
+  { id: 6, name: "Thoufiq Muhammed",      contact: "+91 7396586970", status: "Not Started",  enrollDate: "2026-04-01",
+    notes: "", phaseNotes: { ...EMPTY_PHASE_NOTES },
+    phases: { shopifyStore: true,  antiGravity: true,  videosWatched: true,  certificate: false, interviewPassed: true,  chatPart1: true,  chatPart2: false, shopifyTheme: false, brandedStore: false, portfolioReview: false, finalTest: false } },
+  { id: 7, name: "Rohit Mishra",          contact: "7028789757",     status: "Not Started",  enrollDate: "2026-04-01",
+    notes: "", phaseNotes: { ...EMPTY_PHASE_NOTES },
+    phases: { shopifyStore: true,  antiGravity: true,  videosWatched: true,  certificate: false, interviewPassed: false, chatPart1: false, chatPart2: false, shopifyTheme: false, brandedStore: false, portfolioReview: false, finalTest: false } },
 ];
 
 function getPhaseDay(phases) {
@@ -713,9 +711,8 @@ export default function TraineePortal() {
         if (tData && tData.length > 0) {
           setTrainees(tData.map(t => ({
             ...t,
-            phases:     { certificate: false, ...t.phases },
-            phaseNotes: { certificate: "", ...(t.phase_notes || {}) },
-            phaseNotes: t.phase_notes || {},
+            phases:     { ...EMPTY_PHASES,     ...(t.phases      || {}) },
+            phaseNotes: { ...EMPTY_PHASE_NOTES, ...(t.phase_notes || {}) },
             notes:      t.notes || "",
             certificateImage: t.certificate_image || "",
             certificateText:  t.certificate_text  || "",
@@ -732,8 +729,8 @@ export default function TraineePortal() {
               if (parsed && parsed.length > 0) {
                 seedData = parsed.map(t => ({
                   ...t,
-                  phases:     { certificate: false, ...t.phases },
-                  phaseNotes: { certificate: "", ...(t.phaseNotes || {}) },
+                  phases:     { ...EMPTY_PHASES,      ...(t.phases     || {}) },
+                  phaseNotes: { ...EMPTY_PHASE_NOTES,  ...(t.phaseNotes || {}) },
                 }));
               }
             }
@@ -804,6 +801,56 @@ export default function TraineePortal() {
     const timer = setTimeout(sync, 600);
     return () => clearTimeout(timer);
   }, [dayMessages, dbLoading]);
+
+  // ── Real-time subscriptions — reflect changes from ANY device instantly ──
+  useEffect(() => {
+    const channel = supabase
+      .channel("trainflow-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "trainees" },
+        (payload) => {
+          if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
+            const r = payload.new;
+            const mapped = {
+              ...r,
+              phases:     { ...EMPTY_PHASES,      ...(r.phases      || {}) },
+              phaseNotes: { ...EMPTY_PHASE_NOTES,  ...(r.phase_notes || {}) },
+              notes:      r.notes || "",
+              certificateImage: r.certificate_image || "",
+              certificateText:  r.certificate_text  || "",
+              leavedReason: r.leaved_reason || "",
+              leavedDate:   r.leaved_date   || "",
+            };
+            setTrainees(ts => {
+              const exists = ts.some(t => t.id === mapped.id);
+              if (exists) return ts.map(t => t.id === mapped.id ? { ...t, ...mapped } : t);
+              return [...ts, mapped];
+            });
+          } else if (payload.eventType === "DELETE") {
+            setTrainees(ts => ts.filter(t => t.id !== payload.old.id));
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "day_messages" },
+        (payload) => {
+          if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
+            const { day_key, message } = payload.new;
+            // Convert numeric day_key back to number if needed to match state keys
+            const k = isNaN(day_key) ? day_key : Number(day_key);
+            setDayMessages(prev => ({ ...prev, [k]: message }));
+          } else if (payload.eventType === "DELETE") {
+            const k = isNaN(payload.old.day_key) ? payload.old.day_key : Number(payload.old.day_key);
+            setDayMessages(prev => { const next = { ...prev }; delete next[k]; return next; });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []); // subscribe once on mount
 
   const stats = useMemo(() => {
     const c={total:trainees.length}; STATUSES.forEach(s=>{c[s]=trainees.filter(t=>t.status===s).length;}); return c;
