@@ -20,6 +20,21 @@ const PHASES = [
   { key: "finalTest",      label: "Final Test Passed (80%+)",     day: 8, short: "Final Test", emoji: "🏆",  color: "#22c55e", bg: "#f0fdf4" },
 ];
 
+// Maps each phase key → dedicated Supabase column for its remark text
+const PHASE_REMARK_COL = {
+  shopifyStore:    "shopify_remarks",
+  antiGravity:     "a_gravity_remarks",
+  videosWatched:   "videos_remarks",
+  certificate:     "certificate_remarks",
+  interviewPassed: "interview_remarks",
+  chatPart1:       "chat_p1_remarks",
+  chatPart2:       "chat_p2_remarks",
+  shopifyTheme:    "s_theme_remarks",
+  brandedStore:    "branded_remarks",
+  portfolioReview: "portfolio_remarks",
+  finalTest:       "final_test_remarks",
+};
+
 const STATUSES = ["Not Started", "In Progress", "Completed", "Dropped", "Interview Pending", "Selected", "Not Selected", "Leaved"];
 const GRADUATED_STATUSES = ["Selected", "Not Selected"];
 const BOTTOM_SECTION_STATUSES = ["Selected", "Not Selected", "Leaved"];
@@ -701,16 +716,25 @@ export default function TraineePortal() {
   const [dayMessages, setDayMessages] = useState(DEFAULT_MESSAGES);
 
   // ── Helper: map a DB row → app trainee object ──
-  const rowToTrainee = (t) => ({
-    ...t,
-    phases:     { ...EMPTY_PHASES,      ...(t.phases      || {}) },
-    phaseNotes: { ...EMPTY_PHASE_NOTES,  ...(t.phase_notes || {}) },
-    notes:      t.notes || "",
-    certificateImage: t.certificate_image || "",
-    certificateText:  t.certificate_text  || "",
-    leavedReason: t.leaved_reason || "",
-    leavedDate:   t.leaved_date   || "",
-  });
+  const rowToTrainee = (t) => {
+    // Build phaseNotes from dedicated remark columns; fall back to JSONB for rows
+    // that predate the column migration, so no existing remark is ever lost.
+    const phaseNotes = { ...EMPTY_PHASE_NOTES };
+    PHASES.forEach(p => {
+      const col = PHASE_REMARK_COL[p.key];
+      phaseNotes[p.key] = t[col] || t.phase_notes?.[p.key] || "";
+    });
+    return {
+      ...t,
+      phases:     { ...EMPTY_PHASES, ...(t.phases || {}) },
+      phaseNotes,
+      notes:            t.notes || "",
+      certificateImage: t.certificate_image || "",
+      certificateText:  t.certificate_text  || "",
+      leavedReason:     t.leaved_reason || "",
+      leavedDate:       t.leaved_date   || "",
+    };
+  };
 
   // ── Load data from Supabase on mount ──
   // Supabase is the ONLY source of truth. No local fallback, no seed inserts.
@@ -743,20 +767,25 @@ export default function TraineePortal() {
   }, []);
 
   // ── Helper: convert trainee object → DB row ──
-  const traineeToRow = (t) => ({
-    id:                t.id,
-    name:              t.name,
-    contact:           t.contact,
-    status:            t.status,
-    enroll_date:       t.enrollDate,
-    notes:             t.notes || "",
-    phases:            t.phases || {},
-    phase_notes:       t.phaseNotes || {},
-    certificate_image: t.certificateImage || "",
-    certificate_text:  t.certificateText  || "",
-    leaved_reason:     t.leavedReason || "",
-    leaved_date:       t.leavedDate   || "",
-  });
+  const traineeToRow = (t) => {
+    const row = {
+      id:                t.id,
+      name:              t.name,
+      contact:           t.contact,
+      status:            t.status,
+      enroll_date:       t.enrollDate || t.enroll_date || "", // handle both camelCase & snake_case
+      notes:             t.notes || "",
+      phases:            t.phases || {},
+      phase_notes:       t.phaseNotes || {},                  // keep JSONB for backward compat
+      certificate_image: t.certificateImage || "",
+      certificate_text:  t.certificateText  || "",
+      leaved_reason:     t.leavedReason || "",
+      leaved_date:       t.leavedDate   || "",
+    };
+    // Write every phase remark into its own dedicated column
+    PHASES.forEach(p => { row[PHASE_REMARK_COL[p.key]] = t.phaseNotes?.[p.key] || ""; });
+    return row;
+  };
 
   // ── Toast helpers ──
   const showToast = (type, msg) => {
