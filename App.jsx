@@ -1052,6 +1052,8 @@ function TraineePortal({ profile, onLogout }) {
       leaved_reason:     t.leavedReason || "",
       leaved_date:       t.leavedDate   || "",
       onboarder:         t.onboarder || "",
+      // Preserve ownership — fall back to current user's id on first save (new trainee)
+      created_by:        t.created_by || profile?.id || null,
     };
     // Write every phase remark into its own dedicated column
     PHASES.forEach(p => { row[PHASE_REMARK_COL[p.key]] = t.phaseNotes?.[p.key] || ""; });
@@ -1102,6 +1104,8 @@ function TraineePortal({ profile, onLogout }) {
             const r = payload.new;
             // Skip if this tab is mid-save for this row — we already have the latest state
             if (pendingSaves.current.has(r.id)) return;
+            // Visibility: employees only see/react to rows they own
+            if (!isAdmin && r.created_by && r.created_by !== profile?.id) return;
             const mapped = {
               ...r,
               phases:     { ...EMPTY_PHASES,      ...(r.phases      || {}) },
@@ -1187,7 +1191,7 @@ function TraineePortal({ profile, onLogout }) {
   };
 
   const addTrainee = (data) => {
-    const newT = { ...data, id: Date.now() };
+    const newT = { ...data, id: Date.now(), created_by: profile?.id };
     setTrainees(ts => [...ts, newT]);
     saveTrainee(newT);
   };
