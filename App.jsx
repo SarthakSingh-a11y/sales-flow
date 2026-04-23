@@ -744,8 +744,193 @@ const STAT_CARDS = [
 
 const thStyle = { fontSize:11, fontWeight:700, color:"#64748b", textTransform:"uppercase", letterSpacing:"0.04em" };
 
+/* ══════════════════════════════ LOGIN PAGE ══════════════════════════════ */
+function LoginPage({ onLogin, error, busy }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const submit = (e) => { e.preventDefault(); if (email && password) onLogin(email, password); };
+  return (
+    <div style={{ minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(160deg,#f8faff 0%,#f0f4ff 50%,#faf5ff 100%)",fontFamily:"'DM Sans','Segoe UI',sans-serif",padding:20 }}>
+      <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+      <form onSubmit={submit} style={{ background:"#fff",borderRadius:24,padding:44,width:440,maxWidth:"95vw",boxShadow:"0 28px 80px #6366f122",border:"1.5px solid #e0e7ff" }}>
+        <div style={{ textAlign:"center",marginBottom:28 }}>
+          <div style={{ width:60,height:60,margin:"0 auto 14px",borderRadius:16,background:"linear-gradient(135deg,#6366f1,#8b5cf6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,boxShadow:"0 8px 24px #6366f144" }}>🎓</div>
+          <h1 style={{ margin:0,fontSize:26,fontWeight:800,color:"#1e293b",fontFamily:"'Sora',sans-serif" }}>TrainFlow <span style={{ color:"#6366f1" }}>Pro</span></h1>
+          <p style={{ margin:"6px 0 0",fontSize:14,color:"#94a3b8" }}>Sign in to continue</p>
+        </div>
+        <div style={{ marginBottom:14 }}>
+          <label style={{ display:"block",fontSize:13,fontWeight:600,color:"#475569",marginBottom:6 }}>Email</label>
+          <input type="email" required autoFocus value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@company.com"
+            style={{ width:"100%",padding:"11px 14px",border:"2px solid #e2e8f0",borderRadius:11,fontSize:14,color:"#1e293b",outline:"none",boxSizing:"border-box",fontFamily:"inherit" }}/>
+        </div>
+        <div style={{ marginBottom:18 }}>
+          <label style={{ display:"block",fontSize:13,fontWeight:600,color:"#475569",marginBottom:6 }}>Password</label>
+          <input type="password" required value={password} onChange={e=>setPassword(e.target.value)} placeholder="••••••••"
+            style={{ width:"100%",padding:"11px 14px",border:"2px solid #e2e8f0",borderRadius:11,fontSize:14,color:"#1e293b",outline:"none",boxSizing:"border-box",fontFamily:"inherit" }}/>
+        </div>
+        {error && (
+          <div style={{ marginBottom:14,padding:"10px 14px",background:"#fef2f2",border:"1.5px solid #fecaca",borderRadius:10,color:"#dc2626",fontSize:13,fontWeight:600 }}>
+            ⚠ {error}
+          </div>
+        )}
+        <button type="submit" disabled={busy} style={{
+          width:"100%",padding:"12px",borderRadius:11,border:"none",
+          background: busy ? "#cbd5e1" : "linear-gradient(135deg,#6366f1,#8b5cf6)",
+          color:"#fff",fontWeight:800,fontSize:14,cursor: busy ? "not-allowed" : "pointer",
+          fontFamily:"inherit",boxShadow: busy ? "none" : "0 6px 22px #6366f144",transition:"all 0.2s",
+        }}>{busy ? "Signing in…" : "Login"}</button>
+        <div style={{ marginTop:18,fontSize:11,color:"#94a3b8",textAlign:"center",lineHeight:1.6 }}>
+          Access controlled by your admin. Contact them if you cannot sign in.
+        </div>
+      </form>
+    </div>
+  );
+}
+
+/* ══════════════════════════════ BANNED SCREEN ══════════════════════════════ */
+function BannedScreen({ onLogout }) {
+  return (
+    <div style={{ minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(160deg,#fff1f2 0%,#ffe4e6 100%)",fontFamily:"'DM Sans',sans-serif",padding:20 }}>
+      <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+      <div style={{ background:"#fff",borderRadius:22,padding:44,width:440,maxWidth:"95vw",boxShadow:"0 24px 60px #be123c22",border:"2px solid #fecdd3",textAlign:"center" }}>
+        <div style={{ fontSize:54,marginBottom:14 }}>🚫</div>
+        <h1 style={{ margin:"0 0 10px",fontSize:22,fontWeight:800,color:"#be123c",fontFamily:"'Sora',sans-serif" }}>Access Revoked</h1>
+        <p style={{ margin:"0 0 22px",fontSize:14,color:"#64748b",lineHeight:1.6 }}>
+          Your access has been revoked.<br/>Contact your admin.
+        </p>
+        <button onClick={onLogout} style={{
+          padding:"11px 28px",borderRadius:11,border:"none",
+          background:"linear-gradient(135deg,#be123c,#e11d48)",color:"#fff",
+          fontWeight:700,fontSize:14,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 6px 22px #be123c44",
+        }}>Log out</button>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════ ADMIN PANEL ══════════════════════════════ */
+function AdminPanel({ currentUserId, onClose, showToast }) {
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      const { data, error } = await supabase.from("profiles").select("*").order("created_at", { ascending: true });
+      if (error) { console.error(error); showToast("error", `Load failed: ${error.message}`); }
+      else setUsers(data || []);
+      setLoading(false);
+    };
+    load();
+  }, []);
+
+  const toggleBan = async (u) => {
+    const newVal = !u.is_banned;
+    setUsers(us => us.map(x => x.id === u.id ? { ...x, is_banned: newVal } : x));
+    const { error } = await supabase.from("profiles").update({ is_banned: newVal }).eq("id", u.id);
+    if (error) {
+      console.error(error);
+      showToast("error", `Save failed: ${error.message}`);
+      setUsers(us => us.map(x => x.id === u.id ? { ...x, is_banned: !newVal } : x));
+    } else {
+      showToast("success", newVal ? `${u.email} banned` : `${u.email} unbanned`);
+    }
+  };
+
+  const changeRole = async (u, newRole) => {
+    setUsers(us => us.map(x => x.id === u.id ? { ...x, role: newRole } : x));
+    const { error } = await supabase.from("profiles").update({ role: newRole }).eq("id", u.id);
+    if (error) {
+      console.error(error);
+      showToast("error", `Save failed: ${error.message}`);
+      setUsers(us => us.map(x => x.id === u.id ? { ...x, role: u.role } : x));
+    } else {
+      showToast("success", `${u.email} → ${newRole}`);
+    }
+  };
+
+  return (
+    <div style={{ position:"fixed",inset:0,background:"#0009",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }} onClick={onClose}>
+      <div style={{ width:780,maxWidth:"97vw",maxHeight:"90vh",background:"#fff",borderRadius:20,boxShadow:"0 32px 80px #0004",display:"flex",flexDirection:"column",fontFamily:"'DM Sans',sans-serif",overflow:"hidden" }} onClick={e=>e.stopPropagation()}>
+        <div style={{ padding:"20px 26px",borderBottom:"2px solid #e0e7ff",background:"linear-gradient(135deg,#eef2ff,#ede9fe)",display:"flex",alignItems:"center",justifyContent:"space-between" }}>
+          <div>
+            <div style={{ fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:19,color:"#1e293b" }}>👥 User Management</div>
+            <div style={{ fontSize:12,color:"#6366f1",fontWeight:600,marginTop:2 }}>Manage roles and access for all users</div>
+          </div>
+          <button onClick={onClose} style={{ width:34,height:34,borderRadius:8,border:"none",background:"#fff",cursor:"pointer",fontSize:18,color:"#64748b",boxShadow:"0 2px 8px #0001" }}>×</button>
+        </div>
+
+        <div style={{ flex:1,overflowY:"auto",padding:24 }}>
+          {loading ? (
+            <div style={{ textAlign:"center",padding:40,color:"#94a3b8" }}>Loading users…</div>
+          ) : users.length === 0 ? (
+            <div style={{ textAlign:"center",padding:40,color:"#94a3b8" }}>No users yet.</div>
+          ) : (
+            <div style={{ border:"1.5px solid #e8eaf6",borderRadius:14,overflow:"hidden" }}>
+              <div style={{ display:"grid",gridTemplateColumns:"2fr 2fr 130px 130px",padding:"12px 16px",background:"#fafbff",borderBottom:"2px solid #e8eaf6",gap:10 }}>
+                <div style={thStyle}>Name</div>
+                <div style={thStyle}>Email</div>
+                <div style={{ ...thStyle,textAlign:"center" }}>Role</div>
+                <div style={{ ...thStyle,textAlign:"center" }}>Status</div>
+              </div>
+              {users.map((u,idx) => {
+                const isSelf = u.id === currentUserId;
+                return (
+                  <div key={u.id} style={{
+                    display:"grid",gridTemplateColumns:"2fr 2fr 130px 130px",
+                    padding:"13px 16px",gap:10,alignItems:"center",
+                    background: idx%2===0 ? "#fff" : "#fafbff",
+                    borderBottom:"1px solid #f1f5f9",
+                    opacity: u.is_banned ? 0.6 : 1,
+                  }}>
+                    <div style={{ fontSize:13,fontWeight:600,color:"#1e293b",display:"flex",alignItems:"center",gap:6 }}>
+                      {u.name || u.email?.split("@")[0] || "—"}
+                      {isSelf && <span style={{ fontSize:10,fontWeight:700,color:"#6366f1",background:"#eef2ff",padding:"1px 7px",borderRadius:99 }}>you</span>}
+                    </div>
+                    <div style={{ fontSize:12,color:"#64748b" }}>{u.email}</div>
+                    <div style={{ textAlign:"center" }}>
+                      <select
+                        value={u.role || "employee"}
+                        disabled={isSelf}
+                        onChange={e=>changeRole(u, e.target.value)}
+                        style={{
+                          padding:"5px 10px",borderRadius:7,fontSize:11,fontWeight:700,cursor:isSelf?"not-allowed":"pointer",outline:"none",fontFamily:"inherit",
+                          background: u.role === "admin" ? "#eef2ff" : "#f0fdf4",
+                          color:    u.role === "admin" ? "#6366f1" : "#059669",
+                          border: `1.5px solid ${u.role === "admin" ? "#c7d2fe" : "#bbf7d0"}`,
+                        }}>
+                        <option value="admin">admin</option>
+                        <option value="employee">employee</option>
+                      </select>
+                    </div>
+                    <div style={{ textAlign:"center" }}>
+                      <button
+                        onClick={()=>toggleBan(u)}
+                        disabled={isSelf}
+                        style={{
+                          padding:"5px 14px",borderRadius:7,fontSize:11,fontWeight:700,border:"none",cursor:isSelf?"not-allowed":"pointer",fontFamily:"inherit",
+                          background: u.is_banned ? "linear-gradient(135deg,#ef4444,#dc2626)" : "linear-gradient(135deg,#22c55e,#16a34a)",
+                          color:"#fff",opacity: isSelf ? 0.5 : 1,
+                        }}>{u.is_banned ? "🚫 Banned" : "✅ Active"}</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div style={{ padding:"14px 26px",borderTop:"1.5px solid #e8eaf6",background:"#fafbff",fontSize:11,color:"#94a3b8",lineHeight:1.6 }}>
+          💡 New users: create their account in <strong>Supabase Dashboard → Authentication → Users</strong>. A profile row is created automatically on first login (as <em>employee</em>), then you can promote them here.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ═══════════════════════════════ MAIN PORTAL ═══════════════════════════════ */
-export default function TraineePortal() {
+function TraineePortal({ profile, onLogout }) {
+  const isAdmin = profile?.role === "admin";
+
   const [trainees, setTrainees]   = useState([]);
   const [dbLoading, setDbLoading] = useState(true);
   const [showAdd,        setShowAdd]        = useState(false);
@@ -764,6 +949,7 @@ export default function TraineePortal() {
   const [showPending,      setShowPending]      = useState(true); // open by default so users see who's awaiting a decision
   const [leavedModal,      setLeavedModal]      = useState(null); // { id, name } — trainee being moved to Leaved
   const [outcomeModal,     setOutcomeModal]     = useState(null); // { id, name } — trainee awaiting outcome decision
+  const [showAdminPanel,   setShowAdminPanel]   = useState(false); // admin-only user management modal
   const [toast,            setToast]            = useState(null); // { type:"success"|"error", msg }
   const pendingSaves = useRef(new Set()); // IDs currently mid-save — blocks real-time bounce-back
   const DEFAULT_MESSAGES = {
@@ -1094,9 +1280,26 @@ export default function TraineePortal() {
             <div style={{ fontSize:11,color:"#94a3b8",marginTop:2 }}>Sales Training Portal</div>
           </div>
         </div>
-        <div style={{ display:"flex",gap:10 }}>
+        <div style={{ display:"flex",gap:10,alignItems:"center" }}>
+          {isAdmin && (
+            <button onClick={()=>setShowAdminPanel(true)} title="User Management (Admin only)" style={{ display:"flex",alignItems:"center",gap:6,background:"#fff",color:"#6366f1",border:"1.5px solid #c7d2fe",borderRadius:10,padding:"9px 16px",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit" }}>
+              👥 Users
+            </button>
+          )}
           <button onClick={()=>setShowMessages(true)} style={{ display:"flex",alignItems:"center",gap:8,background:"linear-gradient(135deg,#0ea5e9,#06b6d4)",color:"#fff",border:"none",borderRadius:10,padding:"9px 20px",fontWeight:700,fontSize:14,cursor:"pointer",boxShadow:"0 4px 16px #0ea5e933",fontFamily:"inherit" }}>📨 Day Messages</button>
           <button onClick={()=>setShowAdd(true)} style={{ display:"flex",alignItems:"center",gap:8,background:"linear-gradient(135deg,#6366f1,#8b5cf6)",color:"#fff",border:"none",borderRadius:10,padding:"9px 20px",fontWeight:700,fontSize:14,cursor:"pointer",boxShadow:"0 4px 16px #6366f133",fontFamily:"inherit" }}><span style={{ fontSize:18,lineHeight:1 }}>+</span> New Trainee</button>
+          {/* User badge + Logout */}
+          <div style={{ display:"flex",alignItems:"center",gap:8,paddingLeft:10,marginLeft:4,borderLeft:"1.5px solid #e8eaf6" }}>
+            <div style={{ textAlign:"right",lineHeight:1.2 }}>
+              <div style={{ fontSize:12,fontWeight:700,color:"#1e293b" }}>{profile?.name || profile?.email?.split("@")[0] || "User"}</div>
+              <div style={{ fontSize:10,fontWeight:700,color: isAdmin ? "#6366f1" : "#059669",textTransform:"uppercase",letterSpacing:"0.05em" }}>
+                {isAdmin ? "Admin" : "Employee"}
+              </div>
+            </div>
+            <button onClick={onLogout} title="Log out" style={{ background:"#fff",color:"#ef4444",border:"1.5px solid #fecaca",borderRadius:10,padding:"8px 12px",fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit" }}>
+              ↪ Logout
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1172,14 +1375,16 @@ export default function TraineePortal() {
                 background:"#fff", color:"#64748b", fontWeight:600, fontSize:13,
                 cursor:"pointer", fontFamily:"inherit",
               }}>✕ Deselect All</button>
-              <button onClick={()=>setBulkDeleteConfirm(true)} style={{
-                padding:"8px 18px", borderRadius:8, border:"none",
-                background:"linear-gradient(135deg,#ef4444,#dc2626)",
-                color:"#fff", fontWeight:700, fontSize:13,
-                cursor:"pointer", fontFamily:"inherit",
-                boxShadow:"0 4px 14px #ef444433",
-                display:"flex", alignItems:"center", gap:6,
-              }}>🗑 Delete Selected</button>
+              {isAdmin && (
+                <button onClick={()=>setBulkDeleteConfirm(true)} style={{
+                  padding:"8px 18px", borderRadius:8, border:"none",
+                  background:"linear-gradient(135deg,#ef4444,#dc2626)",
+                  color:"#fff", fontWeight:700, fontSize:13,
+                  cursor:"pointer", fontFamily:"inherit",
+                  boxShadow:"0 4px 14px #ef444433",
+                  display:"flex", alignItems:"center", gap:6,
+                }}>🗑 Delete Selected</button>
+              )}
             </div>
           </div>
         )}
@@ -1741,6 +1946,14 @@ export default function TraineePortal() {
         />
       )}
 
+      {showAdminPanel && isAdmin && (
+        <AdminPanel
+          currentUserId={profile?.id}
+          onClose={()=>setShowAdminPanel(false)}
+          showToast={showToast}
+        />
+      )}
+
       {/* ── Toast notification ── */}
       {toast && (
         <div style={{
@@ -1762,4 +1975,93 @@ export default function TraineePortal() {
       <style>{`@keyframes tfToastIn{from{transform:translateX(110%);opacity:0}to{transform:translateX(0);opacity:1}}`}</style>
     </div>
   );
+}
+
+/* ═══════════════════════════════ AUTH WRAPPER ═══════════════════════════════ */
+export default function App() {
+  const [session,     setSession]     = useState(null);
+  const [profile,     setProfile]     = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [loginError,  setLoginError]  = useState("");
+  const [loginBusy,   setLoginBusy]   = useState(false);
+
+  // Fetch (or create) the profile row for this user
+  const fetchProfile = async (user) => {
+    const { data, error } = await supabase
+      .from("profiles").select("*").eq("id", user.id).single();
+
+    if (error && error.code === "PGRST116") {
+      // No row yet — create one on first login as 'employee'
+      const { data: inserted, error: insErr } = await supabase
+        .from("profiles")
+        .insert({ id: user.id, email: user.email, role: "employee", is_banned: false })
+        .select().single();
+      if (insErr) { console.error("profile insert:", insErr); setAuthLoading(false); return; }
+      setProfile(inserted);
+    } else if (error) {
+      console.error("profile fetch:", error);
+    } else {
+      setProfile(data);
+    }
+    setAuthLoading(false);
+  };
+
+  // Bootstrap + listen for auth changes
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session: s } }) => {
+      setSession(s);
+      if (s?.user) fetchProfile(s.user);
+      else setAuthLoading(false);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s);
+      if (s?.user) fetchProfile(s.user);
+      else { setProfile(null); setAuthLoading(false); }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Live-watch this user's profile row. If an admin bans them, sign them out immediately.
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    const channel = supabase
+      .channel(`profile-${session.user.id}`)
+      .on("postgres_changes",
+        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${session.user.id}` },
+        (payload) => {
+          setProfile(payload.new);
+          if (payload.new?.is_banned) supabase.auth.signOut();
+        })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [session?.user?.id]);
+
+  const login = async (email, password) => {
+    setLoginError("");
+    setLoginBusy(true);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    setLoginBusy(false);
+    if (error) setLoginError(error.message || "Login failed");
+  };
+
+  const logout = async () => {
+    await supabase.auth.signOut();
+    setProfile(null);
+  };
+
+  // ── Gating ──
+  if (authLoading) return (
+    <div style={{ minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(160deg,#f8faff,#f0f4ff,#faf5ff)",fontFamily:"'DM Sans',sans-serif",flexDirection:"column",gap:14 }}>
+      <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+      <div style={{ width:46,height:46,borderRadius:"50%",border:"4px solid #e0e7ff",borderTop:"4px solid #6366f1",animation:"spin 0.8s linear infinite" }}/>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      <div style={{ fontSize:13,color:"#94a3b8" }}>Checking session…</div>
+    </div>
+  );
+
+  if (!session)               return <LoginPage onLogin={login} error={loginError} busy={loginBusy}/>;
+  if (!profile)               return <LoginPage onLogin={login} error="Profile load failed — contact admin" busy={false}/>;
+  if (profile.is_banned)      return <BannedScreen onLogout={logout}/>;
+
+  return <TraineePortal profile={profile} onLogout={logout}/>;
 }
