@@ -120,7 +120,7 @@ function PhaseCheckbox({ checked, onChange, overdue }) {
 }
 
 /* ─── Trainee Notes Modal ─── */
-function TraineeNotesModal({ trainee, onClose, onUpdate }) {
+function TraineeNotesModal({ trainee, onClose, onUpdate, onDelete }) {
   const [activeTab, setActiveTab] = useState(PHASES[0].key);
   const [phases, setPhases]       = useState({ ...trainee.phases });
   const [phaseNotes, setPhaseNotes] = useState({ ...(trainee.phaseNotes || EMPTY_PHASE_NOTES) });
@@ -432,20 +432,32 @@ function TraineeNotesModal({ trainee, onClose, onUpdate }) {
         <div style={{
           padding:"14px 24px", borderTop:"1.5px solid #e8eaf6",
           background:"#fafbff", display:"flex", gap:10,
-          justifyContent:"flex-end", flexShrink:0,
+          alignItems:"center", justifyContent:"space-between", flexShrink:0,
         }}>
-          <button onClick={onClose} style={{
-            padding:"9px 22px", borderRadius:9, border:"1.5px solid #e2e8f0",
-            background:"#fff", color:"#64748b", fontWeight:600,
-            fontSize:13, cursor:"pointer", fontFamily:"inherit",
-          }}>Cancel</button>
-          <button onClick={save} style={{
-            padding:"9px 28px", borderRadius:9, border:"none",
-            background:"linear-gradient(135deg, #6366f1, #8b5cf6)",
-            color:"#fff", fontWeight:700, fontSize:13,
-            cursor:"pointer", fontFamily:"inherit",
-            boxShadow:"0 4px 16px #6366f133",
-          }}>💾 Save Changes</button>
+          {onDelete ? (
+            <button
+              onClick={()=>{ if(confirm(`Delete "${trainee.name}" permanently? This cannot be undone.`)) onDelete(trainee.id); }}
+              style={{
+                padding:"9px 18px", borderRadius:9, border:"1.5px solid #fecaca",
+                background:"#fff1f2", color:"#dc2626", fontWeight:700,
+                fontSize:13, cursor:"pointer", fontFamily:"inherit",
+                display:"flex", alignItems:"center", gap:6,
+              }}>🗑 Delete Trainee</button>
+          ) : <span />}
+          <div style={{ display:"flex", gap:10 }}>
+            <button onClick={onClose} style={{
+              padding:"9px 22px", borderRadius:9, border:"1.5px solid #e2e8f0",
+              background:"#fff", color:"#64748b", fontWeight:600,
+              fontSize:13, cursor:"pointer", fontFamily:"inherit",
+            }}>Cancel</button>
+            <button onClick={save} style={{
+              padding:"9px 28px", borderRadius:9, border:"none",
+              background:"linear-gradient(135deg, #6366f1, #8b5cf6)",
+              color:"#fff", fontWeight:700, fontSize:13,
+              cursor:"pointer", fontFamily:"inherit",
+              boxShadow:"0 4px 16px #6366f133",
+            }}>💾 Save Changes</button>
+          </div>
         </div>
       </div>
     </div>
@@ -1810,16 +1822,14 @@ function TraineePortal({ profile, onLogout }) {
                 background:"#fff", color:"#64748b", fontWeight:600, fontSize:13,
                 cursor:"pointer", fontFamily:"inherit",
               }}>✕ Deselect All</button>
-              {isAdmin && (
-                <button onClick={()=>setBulkDeleteConfirm(true)} style={{
-                  padding:"8px 18px", borderRadius:8, border:"none",
-                  background:"linear-gradient(135deg,#ef4444,#dc2626)",
-                  color:"#fff", fontWeight:700, fontSize:13,
-                  cursor:"pointer", fontFamily:"inherit",
-                  boxShadow:"0 4px 14px #ef444433",
-                  display:"flex", alignItems:"center", gap:6,
-                }}>🗑 Delete Selected</button>
-              )}
+              <button onClick={()=>setBulkDeleteConfirm(true)} style={{
+                padding:"8px 18px", borderRadius:8, border:"none",
+                background:"linear-gradient(135deg,#ef4444,#dc2626)",
+                color:"#fff", fontWeight:700, fontSize:13,
+                cursor:"pointer", fontFamily:"inherit",
+                boxShadow:"0 4px 14px #ef444433",
+                display:"flex", alignItems:"center", gap:6,
+              }}>🗑 Delete Selected</button>
             </div>
           </div>
         )}
@@ -2363,16 +2373,21 @@ function TraineePortal({ profile, onLogout }) {
         personalTabs={personalTabs}
         showToast={showToast}
       />}
-      {notesModal && (
-        <TraineeNotesModal
-          trainee={notesModal}
-          onClose={()=>setNotesModal(null)}
-          onUpdate={(id, updates) => {
-            updateTrainee(id, updates);
-            setNotesModal(null);
-          }}
-        />
-      )}
+      {notesModal && (() => {
+        // Delete is allowed when: admin (any trainee) OR employee owns this trainee
+        const canDelete = isAdmin || notesModal.created_by === profile?.id;
+        return (
+          <TraineeNotesModal
+            trainee={notesModal}
+            onClose={()=>setNotesModal(null)}
+            onUpdate={(id, updates) => {
+              updateTrainee(id, updates);
+              setNotesModal(null);
+            }}
+            onDelete={canDelete ? (id)=>{ deleteTrainee(id); setNotesModal(null); } : null}
+          />
+        );
+      })()}
       {bulkDeleteConfirm && (
         <div style={{ position:"fixed",inset:0,background:"#0009",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center" }} onClick={()=>setBulkDeleteConfirm(false)}>
           <div style={{ background:"#fff",borderRadius:20,padding:36,width:420,maxWidth:"92vw",boxShadow:"0 25px 60px #ef444433",fontFamily:"'DM Sans',sans-serif",border:"2px solid #fecaca" }} onClick={e=>e.stopPropagation()}>
