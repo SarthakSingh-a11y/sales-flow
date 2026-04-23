@@ -452,10 +452,17 @@ function TraineeNotesModal({ trainee, onClose, onUpdate }) {
 }
 
 /* ─── Add Trainee Modal ─── */
-function AddTraineeModal({ onClose, onAdd }) {
-  const [form, setForm] = useState({ name:"", contact:"", onboarder:"", enrollDate:new Date().toISOString().slice(0,10), notes:"" });
+function AddTraineeModal({ onClose, onAdd, isAdmin, defaultOnboarder }) {
+  const [form, setForm] = useState({
+    name:"",
+    contact:"",
+    onboarder: isAdmin ? "" : (defaultOnboarder || ""),
+    enrollDate: new Date().toISOString().slice(0,10),
+    notes:"",
+  });
   const set = (k,v) => setForm(f => ({...f,[k]:v}));
-  const canAdd = form.name.trim() && form.onboarder;
+  // Employees don't need to pick an onboarder — it's auto-set, so name is the only required field
+  const canAdd = form.name.trim() && (isAdmin ? !!form.onboarder : true);
   const ob = ONBOARDER_CONFIG[form.onboarder];
   return (
     <div style={{ position:"fixed",inset:0,background:"#0008",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center" }} onClick={onClose}>
@@ -470,18 +477,20 @@ function AddTraineeModal({ onClose, onAdd }) {
             <input type={type} value={form[key]} onChange={e=>set(key,e.target.value)} placeholder={placeholder} style={{ width:"100%",padding:"10px 14px",border:"2px solid #e2e8f0",borderRadius:10,fontSize:14,color:"#1e293b",outline:"none",boxSizing:"border-box",fontFamily:"inherit" }}/>
           </div>
         ))}
-        {/* Onboarder — required */}
-        <div style={{ marginBottom:16 }}>
-          <label style={{ display:"block",fontSize:13,fontWeight:600,color:"#475569",marginBottom:6 }}>👤 Onboarder — Who is taking this training?</label>
-          <select
-            value={form.onboarder}
-            onChange={e=>set("onboarder",e.target.value)}
-            style={{ width:"100%",padding:"10px 14px",border: form.onboarder ? `2px solid ${ob?.color}88` : "2px solid #e2e8f0",borderRadius:10,fontSize:14,color: form.onboarder ? ob?.color : "#94a3b8",background: form.onboarder ? ob?.bg : "#fff",outline:"none",boxSizing:"border-box",fontFamily:"inherit",fontWeight: form.onboarder ? 700 : 400,cursor:"pointer" }}
-          >
-            <option value="">— Select onboarder —</option>
-            {ONBOARDERS.map(o=><option key={o} value={o}>{o}</option>)}
-          </select>
-        </div>
+        {/* Onboarder — only admins pick; employees are auto-assigned their own profile name */}
+        {isAdmin && (
+          <div style={{ marginBottom:16 }}>
+            <label style={{ display:"block",fontSize:13,fontWeight:600,color:"#475569",marginBottom:6 }}>👤 Onboarder — Who is taking this training?</label>
+            <select
+              value={form.onboarder}
+              onChange={e=>set("onboarder",e.target.value)}
+              style={{ width:"100%",padding:"10px 14px",border: form.onboarder ? `2px solid ${ob?.color}88` : "2px solid #e2e8f0",borderRadius:10,fontSize:14,color: form.onboarder ? ob?.color : "#94a3b8",background: form.onboarder ? ob?.bg : "#fff",outline:"none",boxSizing:"border-box",fontFamily:"inherit",fontWeight: form.onboarder ? 700 : 400,cursor:"pointer" }}
+            >
+              <option value="">— Select onboarder —</option>
+              {ONBOARDERS.map(o=><option key={o} value={o}>{o}</option>)}
+            </select>
+          </div>
+        )}
         <div style={{ marginBottom:24 }}>
           <label style={{ display:"block",fontSize:13,fontWeight:600,color:"#475569",marginBottom:6 }}>Notes</label>
           <textarea value={form.notes} onChange={e=>set("notes",e.target.value)} rows={3} placeholder="Any notes about this trainee..." style={{ width:"100%",padding:"10px 14px",border:"2px solid #e2e8f0",borderRadius:10,fontSize:14,color:"#1e293b",outline:"none",boxSizing:"border-box",resize:"vertical",fontFamily:"inherit" }}/>
@@ -1316,9 +1325,9 @@ function TraineePortal({ profile, onLogout }) {
           <div style={{ display:"flex",alignItems:"center",gap:8,paddingLeft:10,marginLeft:4,borderLeft:"1.5px solid #e8eaf6" }}>
             <div style={{ textAlign:"right",lineHeight:1.2 }}>
               <div style={{ fontSize:12,fontWeight:700,color:"#1e293b" }}>{profile?.name || profile?.email?.split("@")[0] || "User"}</div>
-              <div style={{ fontSize:10,fontWeight:700,color: isAdmin ? "#6366f1" : "#059669",textTransform:"uppercase",letterSpacing:"0.05em" }}>
-                {isAdmin ? "Admin" : "Employee"}
-              </div>
+              {isAdmin && (
+                <div style={{ fontSize:10,fontWeight:700,color:"#6366f1",textTransform:"uppercase",letterSpacing:"0.05em" }}>Admin</div>
+              )}
             </div>
             <button onClick={onLogout} title="Log out" style={{ background:"#fff",color:"#ef4444",border:"1.5px solid #fecaca",borderRadius:10,padding:"8px 12px",fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit" }}>
               ↪ Logout
@@ -1364,11 +1373,13 @@ function TraineePortal({ profile, onLogout }) {
               {options.map(o=><option key={o} value={o}>{o==="All"?`All ${label}s`:o}</option>)}
             </select>
           ))}
-          {/* Onboarder filter */}
-          <select value={filterOnboarder} onChange={e=>setFilterOnboarder(e.target.value)} style={{ padding:"8px 14px",border:"1.5px solid #e2e8f0",borderRadius:9,fontSize:13,color: filterOnboarder!=="All" ? ONBOARDER_CONFIG[filterOnboarder]?.color : "#374151",background: filterOnboarder!=="All" ? ONBOARDER_CONFIG[filterOnboarder]?.bg : "#f8fafc",outline:"none",fontFamily:"inherit",fontWeight: filterOnboarder!=="All" ? 700 : 500,cursor:"pointer",minWidth:150 }}>
-            <option value="All">All Onboarders</option>
-            {ONBOARDERS.map(o=><option key={o} value={o}>{o}</option>)}
-          </select>
+          {/* Onboarder filter — admins only (employees see only their own trainees) */}
+          {isAdmin && (
+            <select value={filterOnboarder} onChange={e=>setFilterOnboarder(e.target.value)} style={{ padding:"8px 14px",border:"1.5px solid #e2e8f0",borderRadius:9,fontSize:13,color: filterOnboarder!=="All" ? ONBOARDER_CONFIG[filterOnboarder]?.color : "#374151",background: filterOnboarder!=="All" ? ONBOARDER_CONFIG[filterOnboarder]?.bg : "#f8fafc",outline:"none",fontFamily:"inherit",fontWeight: filterOnboarder!=="All" ? 700 : 500,cursor:"pointer",minWidth:150 }}>
+              <option value="All">All Onboarders</option>
+              {ONBOARDERS.map(o=><option key={o} value={o}>{o}</option>)}
+            </select>
+          )}
           <div style={{ flex:1,minWidth:200,position:"relative" }}>
             <span style={{ position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#94a3b8",fontSize:16 }}>🔍</span>
             <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search trainee name..." style={{ width:"100%",padding:"8px 14px 8px 36px",border:"1.5px solid #e2e8f0",borderRadius:9,fontSize:13,color:"#374151",background:"#f8fafc",outline:"none",fontFamily:"inherit",boxSizing:"border-box" }}/>
@@ -1916,7 +1927,7 @@ function TraineePortal({ profile, onLogout }) {
       </div>
 
       {/* ── Modals ── */}
-      {showAdd && <AddTraineeModal onClose={()=>setShowAdd(false)} onAdd={addTrainee}/>}
+      {showAdd && <AddTraineeModal onClose={()=>setShowAdd(false)} onAdd={addTrainee} isAdmin={isAdmin} defaultOnboarder={profile?.name || ""}/>}
       {showMessages && <DayMessagesPanel dayMessages={dayMessages} setDayMessages={setDayMessages} onSave={saveDayMessage} onClose={()=>setShowMessages(false)}/>}
       {notesModal && (
         <TraineeNotesModal
