@@ -695,13 +695,10 @@ function LeavedReasonModal({ trainee, onConfirm, onClose }) {
 
 /* ─── STAT CARDS ─── */
 const STAT_CARDS = [
-  { key:"total",            label:"Total Trainees",    color:"#6366f1", bg:"linear-gradient(135deg,#eef2ff,#e0e7ff)", icon:"👥" },
-  { key:"Interview Pending",label:"Interview Pending", color:"#8b5cf6", bg:"linear-gradient(135deg,#f5f3ff,#ede9fe)", icon:"🎤" },
-  { key:"In Progress",      label:"In Progress",       color:"#f59e0b", bg:"linear-gradient(135deg,#fffbeb,#fef3c7)", icon:"⚡" },
-  { key:"Completed",        label:"Completed",         color:"#22c55e", bg:"linear-gradient(135deg,#f0fdf4,#dcfce7)", icon:"✅" },
-  { key:"Selected",         label:"Selected",          color:"#0d9488", bg:"linear-gradient(135deg,#f0fdfa,#ccfbf1)", icon:"✅" },
-  { key:"Not Selected",     label:"Not Selected",      color:"#d97706", bg:"linear-gradient(135deg,#fffbeb,#fef3c7)", icon:"❌" },
-  { key:"Leaved",           label:"Leaved",            color:"#be123c", bg:"linear-gradient(135deg,#fff1f2,#ffe4e6)", icon:"🚪" },
+  { key:"total",        label:"Total Trainees", color:"#6366f1", bg:"linear-gradient(135deg,#eef2ff,#e0e7ff)", icon:"👥" },
+  { key:"Selected",     label:"Selected",       color:"#0d9488", bg:"linear-gradient(135deg,#f0fdfa,#ccfbf1)", icon:"✅" },
+  { key:"Not Selected", label:"Not Selected",   color:"#d97706", bg:"linear-gradient(135deg,#fffbeb,#fef3c7)", icon:"❌" },
+  { key:"Leaved",       label:"Leaved",         color:"#be123c", bg:"linear-gradient(135deg,#fff1f2,#ffe4e6)", icon:"🚪" },
 ];
 
 const thStyle = { fontSize:11, fontWeight:700, color:"#64748b", textTransform:"uppercase", letterSpacing:"0.04em" };
@@ -1035,7 +1032,7 @@ export default function TraineePortal() {
 
       <div style={{ padding:"28px 32px" }}>
         {/* ── Stats ── */}
-        <div style={{ display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:14,marginBottom:28 }}>
+        <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:28 }}>
           {STAT_CARDS.map(card=>{
             const isActive = card.key === "total" ? filterStatus === "All" : filterStatus === card.key;
             return (
