@@ -1491,10 +1491,23 @@ function TraineePortal({ profile, onLogout }) {
                 {/* Contact */}
                 <div style={{ fontSize:13,color:"#64748b",display:"flex",alignItems:"center",gap:6 }}>📱 {trainee.contact}</div>
 
-                {/* Onboarder — dropdown */}
+                {/* Onboarder — admins get a dropdown, employees see a read-only badge */}
                 <div style={{ display:"flex",alignItems:"center",justifyContent:"center" }} onClick={e=>e.stopPropagation()}>
                   {(() => {
                     const ob = ONBOARDER_CONFIG[trainee.onboarder];
+                    if (!isAdmin) {
+                      return (
+                        <span style={{
+                          padding:"4px 10px", borderRadius:7, fontSize:11, fontWeight:700,
+                          fontFamily:"inherit", display:"inline-block", maxWidth:95,
+                          whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis",
+                          background: ob?.bg||"#f1f5f9", color: ob?.color||"#64748b",
+                          border:`1.5px solid ${ob?.color||"#cbd5e1"}44`,
+                        }}>
+                          {trainee.onboarder || "—"}
+                        </span>
+                      );
+                    }
                     return (
                       <select value={trainee.onboarder||""} onChange={e=>changeOnboarder(trainee.id,e.target.value)} style={{
                         padding:"4px 6px", borderRadius:7, fontSize:11, fontWeight:700, cursor:"pointer", outline:"none", fontFamily:"inherit",
