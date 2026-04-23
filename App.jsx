@@ -546,7 +546,7 @@ function DayMessagesPanel({ dayMessages, setDayMessages, onSave, onReset, onClos
         {/* Day Tabs */}
         <div style={{ display:"flex",gap:0,overflowX:"auto",borderBottom:"2px solid #e8eaf6",background:"#fafbff",padding:"0 16px",flexShrink:0 }}>
           {["intro","faq",1,2,"certificate",3,4,5,7,8].map(d => {
-            const tabNames = { intro:"✨ Intro", faq:"📄 FAQ PDF", 1:"Videos", 2:"Interview", certificate:"📜 Certificate", 3:"Chat P1", 4:"Chat P2", 5:"Theme + Brand", 7:"Portfolio", 8:"Final Test" };
+            const tabNames = { intro:"Intro", faq:"📄 FAQ PDF", 1:"Videos", 2:"Interview", certificate:"Certificate", 3:"Chat P1", 4:"Chat P2", 5:"Theme + Brand", 7:"Portfolio", 8:"Final Test" };
             return (
               <button key={d} onClick={()=>{setSelectedDay(d);setEditing(false);setCopied(false);}} style={{
                 padding:"12px 14px",border:"none",background:"transparent",
