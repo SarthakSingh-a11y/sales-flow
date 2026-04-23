@@ -948,7 +948,12 @@ export default function TraineePortal() {
     return true;
   }), [trainees, filterName, filterStatus, filterOnboarder, search]);
 
-  const activeTrainees      = useMemo(() => filtered.filter(t => !BOTTOM_SECTION_STATUSES.includes(t.status)), [filtered]);
+  const activeTrainees      = useMemo(() => {
+    // If the user explicitly filters by a bottom-section status (Pending / Selected /
+    // Not Selected / Leaved), surface those trainees in the main table instead of hiding them.
+    if (BOTTOM_SECTION_STATUSES.includes(filterStatus)) return filtered;
+    return filtered.filter(t => !BOTTOM_SECTION_STATUSES.includes(t.status));
+  }, [filtered, filterStatus]);
   const pendingTrainees     = useMemo(() => filtered.filter(t => t.status === "Pending"), [filtered]);
   const selectedTrainees    = useMemo(() => filtered.filter(t => t.status === "Selected"), [filtered]);
   const notSelectedTrainees = useMemo(() => filtered.filter(t => t.status === "Not Selected"), [filtered]);
@@ -1302,7 +1307,7 @@ export default function TraineePortal() {
         </div>
 
         {/* ── Pending Section ── (awaiting outcome decision) */}
-        {pendingTrainees.length > 0 && (
+        {pendingTrainees.length > 0 && filterStatus !== "Pending" && (
           <div style={{ marginTop:24 }}>
             <div
               onClick={()=>setShowPending(g=>!g)}
@@ -1396,7 +1401,7 @@ export default function TraineePortal() {
         )}
 
         {/* ── Selected Section ── */}
-        {selectedTrainees.length > 0 && (
+        {selectedTrainees.length > 0 && filterStatus !== "Selected" && (
           <div style={{ marginTop:24 }}>
             <div
               onClick={()=>setShowSelected(g=>!g)}
@@ -1487,7 +1492,7 @@ export default function TraineePortal() {
         )}
 
         {/* ── Not Selected Section ── */}
-        {notSelectedTrainees.length > 0 && (
+        {notSelectedTrainees.length > 0 && filterStatus !== "Not Selected" && (
           <div style={{ marginTop:20 }}>
             <div
               onClick={()=>setShowNotSelected(g=>!g)}
@@ -1578,7 +1583,7 @@ export default function TraineePortal() {
         )}
 
         {/* ── Leaved Section ── */}
-        {leavedTrainees.length > 0 && (
+        {leavedTrainees.length > 0 && filterStatus !== "Leaved" && (
           <div style={{ marginTop:20 }}>
             <div
               onClick={()=>setShowLeaved(g=>!g)}
