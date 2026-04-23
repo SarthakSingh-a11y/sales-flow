@@ -543,19 +543,21 @@ function DayMessagesPanel({ dayMessages, setDayMessages, onSave, onReset, onClos
           <button onClick={onClose} style={{ width:34,height:34,borderRadius:8,border:"none",background:"#fff",cursor:"pointer",fontSize:18,color:"#64748b",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px #0001" }}>×</button>
         </div>
 
-        {/* Day Tabs */}
-        <div style={{ display:"flex",gap:0,overflowX:"auto",borderBottom:"2px solid #e8eaf6",background:"#fafbff",padding:"0 16px",flexShrink:0 }}>
+        {/* Day Tabs — single row, all fit without scrolling */}
+        <div style={{ display:"flex",gap:0,overflow:"hidden",borderBottom:"2px solid #e8eaf6",background:"#fafbff",padding:"0 8px",flexShrink:0 }}>
           {["intro","faq",1,2,"certificate",3,4,5,7,8].map(d => {
-            const tabNames = { intro:"Intro", faq:"📄 FAQ PDF", 1:"Videos", 2:"Interview", certificate:"Certificate", 3:"Chat P1", 4:"Chat P2", 5:"Theme + Brand", 7:"Portfolio", 8:"Final Test" };
+            const tabNames = { intro:"Intro", faq:"FAQ", 1:"Videos", 2:"Interview", certificate:"Certificate", 3:"Chat P1", 4:"Chat P2", 5:"Theme", 7:"Portfolio", 8:"Final Test" };
             return (
               <button key={d} onClick={()=>{setSelectedDay(d);setEditing(false);setCopied(false);}} style={{
-                padding:"12px 14px",border:"none",background:"transparent",
+                flex:1,minWidth:0,
+                padding:"11px 4px",border:"none",background:"transparent",
                 borderBottom: selectedDay===d ? "3px solid #6366f1" : "3px solid transparent",
                 color: selectedDay===d ? "#6366f1" : "#94a3b8",
                 fontWeight: selectedDay===d ? 700 : 500,
-                fontSize:13,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit",
+                fontSize:11,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit",
                 transition:"all 0.15s",
-              }}>
+                overflow:"hidden",textOverflow:"ellipsis",
+              }} title={dayLabels[d]}>
                 {tabNames[d]}
               </button>
             );
