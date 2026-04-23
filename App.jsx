@@ -42,15 +42,18 @@ const ONBOARDER_CONFIG = {
   Kritika: { color: "#ec4899", bg: "#fdf2f8" },
 };
 
-const STATUSES = ["Not Started", "In Progress", "Completed", "Dropped", "Interview Pending", "Selected", "Not Selected", "Leaved"];
+const STATUSES = ["Not Started", "In Progress", "Completed", "Dropped", "Interview Pending", "Pending", "Selected", "Not Selected", "Leaved"];
 const GRADUATED_STATUSES = ["Selected", "Not Selected"];
-const BOTTOM_SECTION_STATUSES = ["Selected", "Not Selected", "Leaved"];
+// Any "all 11 done" terminal state — used to decide whether to re-open the outcome modal
+const ALL_DONE_STATUSES = ["Selected", "Not Selected", "Pending"];
+const BOTTOM_SECTION_STATUSES = ["Pending", "Selected", "Not Selected", "Leaved"];
 const STATUS_CONFIG = {
   "Not Started":       { color: "#ef4444", bg: "#fef2f2", dot: "#ef4444" },
   "In Progress":       { color: "#f59e0b", bg: "#fffbeb", dot: "#f59e0b" },
   "Completed":         { color: "#22c55e", bg: "#f0fdf4", dot: "#22c55e" },
   "Dropped":           { color: "#6b7280", bg: "#f9fafb", dot: "#9ca3af" },
   "Interview Pending": { color: "#8b5cf6", bg: "#f5f3ff", dot: "#8b5cf6" },
+  "Pending":           { color: "#ca8a04", bg: "#fef9c3", dot: "#eab308" },
   "Selected":          { color: "#0d9488", bg: "#f0fdfa", dot: "#14b8a6" },
   "Not Selected":      { color: "#d97706", bg: "#fffbeb", dot: "#f59e0b" },
   "Leaved":            { color: "#be123c", bg: "#fff1f2", dot: "#f43f5e" },
@@ -693,9 +696,47 @@ function LeavedReasonModal({ trainee, onConfirm, onClose }) {
   );
 }
 
+/* ─── Outcome Modal — shown when all 11 phases become complete ─── */
+function OutcomeModal({ trainee, onPick, onClose }) {
+  return (
+    <div style={{ position:"fixed",inset:0,background:"#0009",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }} onClick={onClose}>
+      <div
+        style={{ background:"#fff",borderRadius:22,padding:40,width:520,maxWidth:"95vw",boxShadow:"0 28px 80px #0004",fontFamily:"'DM Sans',sans-serif",border:"2px solid #fde68a",animation:"popIn 0.25s ease" }}
+        onClick={e=>e.stopPropagation()}
+      >
+        <style>{`@keyframes popIn{from{transform:scale(0.92);opacity:0}to{transform:scale(1);opacity:1}}`}</style>
+        <div style={{ textAlign:"center",marginBottom:24 }}>
+          <div style={{ fontSize:54,marginBottom:10 }}>🎉</div>
+          <h2 style={{ margin:"0 0 10px",fontSize:22,fontWeight:800,color:"#1e293b",fontFamily:"'Sora',sans-serif",lineHeight:1.3 }}>
+            {trainee.name} has completed<br/>all stages!
+          </h2>
+          <p style={{ margin:0,fontSize:14,color:"#64748b",lineHeight:1.6 }}>
+            What's the final result?
+          </p>
+        </div>
+        <div style={{ display:"flex",gap:12,marginBottom:14 }}>
+          <button
+            onClick={()=>onPick("Selected")}
+            style={{ flex:1,padding:"14px",borderRadius:12,border:"none",background:"linear-gradient(135deg,#0d9488,#14b8a6)",color:"#fff",fontWeight:800,cursor:"pointer",fontSize:15,fontFamily:"inherit",boxShadow:"0 6px 20px #0d948844",display:"flex",alignItems:"center",justifyContent:"center",gap:8 }}
+          >✅ Selected</button>
+          <button
+            onClick={()=>onPick("Not Selected")}
+            style={{ flex:1,padding:"14px",borderRadius:12,border:"none",background:"linear-gradient(135deg,#d97706,#f59e0b)",color:"#fff",fontWeight:800,cursor:"pointer",fontSize:15,fontFamily:"inherit",boxShadow:"0 6px 20px #d9770644",display:"flex",alignItems:"center",justifyContent:"center",gap:8 }}
+          >❌ Not Selected</button>
+        </div>
+        <button
+          onClick={onClose}
+          style={{ width:"100%",padding:"10px",borderRadius:10,border:"1.5px solid #fde68a",background:"#fefce8",color:"#a16207",fontWeight:700,cursor:"pointer",fontSize:13,fontFamily:"inherit" }}
+        >⏳ Decide Later (keep as Pending)</button>
+      </div>
+    </div>
+  );
+}
+
 /* ─── STAT CARDS ─── */
 const STAT_CARDS = [
   { key:"total",        label:"Total Trainees", color:"#6366f1", bg:"linear-gradient(135deg,#eef2ff,#e0e7ff)", icon:"👥" },
+  { key:"Pending",      label:"Pending",        color:"#ca8a04", bg:"linear-gradient(135deg,#fefce8,#fef9c3)", icon:"⏳" },
   { key:"Selected",     label:"Selected",       color:"#0d9488", bg:"linear-gradient(135deg,#f0fdfa,#ccfbf1)", icon:"✅" },
   { key:"Not Selected", label:"Not Selected",   color:"#d97706", bg:"linear-gradient(135deg,#fffbeb,#fef3c7)", icon:"❌" },
   { key:"Leaved",       label:"Leaved",         color:"#be123c", bg:"linear-gradient(135deg,#fff1f2,#ffe4e6)", icon:"🚪" },
@@ -720,7 +761,9 @@ export default function TraineePortal() {
   const [showSelected,     setShowSelected]     = useState(false);
   const [showNotSelected,  setShowNotSelected]  = useState(false);
   const [showLeaved,       setShowLeaved]       = useState(false);
+  const [showPending,      setShowPending]      = useState(true); // open by default so users see who's awaiting a decision
   const [leavedModal,      setLeavedModal]      = useState(null); // { id, name } — trainee being moved to Leaved
+  const [outcomeModal,     setOutcomeModal]     = useState(null); // { id, name } — trainee awaiting outcome decision
   const [toast,            setToast]            = useState(null); // { type:"success"|"error", msg }
   const pendingSaves = useRef(new Set()); // IDs currently mid-save — blocks real-time bounce-back
   const DEFAULT_MESSAGES = {
@@ -906,6 +949,7 @@ export default function TraineePortal() {
   }), [trainees, filterName, filterStatus, filterOnboarder, search]);
 
   const activeTrainees      = useMemo(() => filtered.filter(t => !BOTTOM_SECTION_STATUSES.includes(t.status)), [filtered]);
+  const pendingTrainees     = useMemo(() => filtered.filter(t => t.status === "Pending"), [filtered]);
   const selectedTrainees    = useMemo(() => filtered.filter(t => t.status === "Selected"), [filtered]);
   const notSelectedTrainees = useMemo(() => filtered.filter(t => t.status === "Not Selected"), [filtered]);
   const leavedTrainees      = useMemo(() => filtered.filter(t => t.status === "Leaved"), [filtered]);
@@ -915,13 +959,20 @@ export default function TraineePortal() {
     const newPhases = { ...t.phases, [key]: val };
     const allDone   = PHASES.every(p => newPhases[p.key]);
     let newStatus   = t.status;
+    let triggerOutcome = false;
     if (t.status !== "Leaved" && t.status !== "Dropped") {
-      if (allDone  && !GRADUATED_STATUSES.includes(t.status)) newStatus = "Selected";
-      if (!allDone &&  GRADUATED_STATUSES.includes(t.status)) newStatus = "In Progress";
+      // Just became fully complete and hasn't been resolved yet → Pending + open outcome modal
+      if (allDone && !ALL_DONE_STATUSES.includes(t.status)) {
+        newStatus = "Pending";
+        triggerOutcome = true;
+      }
+      // Reverted from a terminal/Pending state by unchecking → back to In Progress
+      if (!allDone && ALL_DONE_STATUSES.includes(t.status)) newStatus = "In Progress";
     }
     const updated = { ...t, phases: newPhases, status: newStatus };
     setTrainees(ts => ts.map(tr => tr.id === id ? updated : tr));
     saveTrainee(updated);
+    if (triggerOutcome) setOutcomeModal({ id, name: t.name });
   };
 
   const addTrainee = (data) => {
@@ -952,12 +1003,17 @@ export default function TraineePortal() {
     const t = trainees.find(tr => tr.id === id); if (!t) return;
     const merged = { ...t, ...updates };
     const allDone = PHASES.every(p => merged.phases[p.key]);
+    let triggerOutcome = false;
     if (merged.status !== "Leaved" && merged.status !== "Dropped") {
-      if (allDone  && !GRADUATED_STATUSES.includes(merged.status)) merged.status = "Selected";
-      if (!allDone &&  GRADUATED_STATUSES.includes(merged.status)) merged.status = "In Progress";
+      if (allDone && !ALL_DONE_STATUSES.includes(merged.status)) {
+        merged.status = "Pending";
+        triggerOutcome = true;
+      }
+      if (!allDone && ALL_DONE_STATUSES.includes(merged.status)) merged.status = "In Progress";
     }
     setTrainees(ts => ts.map(tr => tr.id === id ? merged : tr));
     saveTrainee(merged);
+    if (triggerOutcome) setOutcomeModal({ id, name: merged.name });
   };
 
   const changeTraineeStatus = (id, newStatus) => {
@@ -977,6 +1033,15 @@ export default function TraineePortal() {
     const updated = { ...t, status: "Leaved", leavedReason: reason, leavedDate: new Date().toISOString().slice(0,10) };
     setTrainees(ts => ts.map(tr => tr.id === id ? updated : tr));
     setLeavedModal(null);
+    saveTrainee(updated);
+  };
+
+  // Called when user picks Selected / Not Selected in the outcome modal
+  const confirmOutcome = (id, outcome /* "Selected" | "Not Selected" */) => {
+    const t = trainees.find(tr => tr.id === id); if (!t) return;
+    const updated = { ...t, status: outcome };
+    setTrainees(ts => ts.map(tr => tr.id === id ? updated : tr));
+    setOutcomeModal(null);
     saveTrainee(updated);
   };
 
@@ -1032,7 +1097,7 @@ export default function TraineePortal() {
 
       <div style={{ padding:"28px 32px" }}>
         {/* ── Stats ── */}
-        <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:28 }}>
+        <div style={{ display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:14,marginBottom:28 }}>
           {STAT_CARDS.map(card=>{
             const isActive = card.key === "total" ? filterStatus === "All" : filterStatus === card.key;
             return (
@@ -1077,7 +1142,7 @@ export default function TraineePortal() {
             <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search trainee name..." style={{ width:"100%",padding:"8px 14px 8px 36px",border:"1.5px solid #e2e8f0",borderRadius:9,fontSize:13,color:"#374151",background:"#f8fafc",outline:"none",fontFamily:"inherit",boxSizing:"border-box" }}/>
           </div>
           <div style={{ fontSize:13,color:"#94a3b8",fontWeight:500,marginLeft:"auto" }}>
-            Showing <strong style={{ color:"#6366f1" }}>{activeTrainees.length}</strong> active{selectedTrainees.length > 0 ? `, ${selectedTrainees.length} selected` : ""}{notSelectedTrainees.length > 0 ? `, ${notSelectedTrainees.length} not selected` : ""}{leavedTrainees.length > 0 ? `, ${leavedTrainees.length} leaved` : ""} of {trainees.length} trainees
+            Showing <strong style={{ color:"#6366f1" }}>{activeTrainees.length}</strong> active{pendingTrainees.length > 0 ? `, ${pendingTrainees.length} pending` : ""}{selectedTrainees.length > 0 ? `, ${selectedTrainees.length} selected` : ""}{notSelectedTrainees.length > 0 ? `, ${notSelectedTrainees.length} not selected` : ""}{leavedTrainees.length > 0 ? `, ${leavedTrainees.length} leaved` : ""} of {trainees.length} trainees
           </div>
         </div>
 
@@ -1235,6 +1300,100 @@ export default function TraineePortal() {
           </div>
           <div style={{ fontSize:12,color:"#94a3b8" }}>· Click any row to view/edit remarks per stage</div>
         </div>
+
+        {/* ── Pending Section ── (awaiting outcome decision) */}
+        {pendingTrainees.length > 0 && (
+          <div style={{ marginTop:24 }}>
+            <div
+              onClick={()=>setShowPending(g=>!g)}
+              style={{
+                display:"flex", alignItems:"center", justifyContent:"space-between",
+                padding:"16px 22px", borderRadius: showPending ? "16px 16px 0 0" : 16,
+                background:"linear-gradient(135deg,#fefce8,#fef9c3)",
+                border:"1.5px solid #fde047", cursor:"pointer",
+                transition:"border-radius 0.2s",
+              }}
+            >
+              <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                <span style={{ fontSize:24 }}>⏳</span>
+                <div>
+                  <div style={{ fontFamily:"'Sora',sans-serif", fontWeight:800, fontSize:16, color:"#ca8a04" }}>
+                    Pending — Awaiting Decision
+                  </div>
+                  <div style={{ fontSize:12, color:"#a16207", fontWeight:600, marginTop:2 }}>
+                    {pendingTrainees.length} trainee{pendingTrainees.length>1?"s":""} completed all stages — click to decide Selected / Not Selected
+                  </div>
+                </div>
+              </div>
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ background:"#ca8a04", color:"#fff", borderRadius:99, padding:"4px 14px", fontSize:13, fontWeight:700 }}>
+                  {pendingTrainees.length}
+                </span>
+                <span style={{ fontSize:18, color:"#ca8a04", transition:"transform 0.2s", transform: showPending ? "rotate(180deg)" : "rotate(0deg)", display:"inline-block" }}>▼</span>
+              </div>
+            </div>
+
+            {showPending && (
+              <div style={{ background:"#fff", borderRadius:"0 0 18px 18px", border:"1.5px solid #fde047", borderTop:"none", overflow:"hidden", boxShadow:"0 4px 24px #0000080a" }}>
+                <div style={{ display:"grid",gridTemplateColumns:"2fr 1.4fr 130px 90px repeat(11,64px)",padding:"12px 20px",background:"linear-gradient(135deg,#fefce8,#fef9c3)",borderBottom:"2px solid #fde047",gap:8,alignItems:"center" }}>
+                  <div style={thStyle}>Trainee Name</div>
+                  <div style={thStyle}>Contact</div>
+                  <div style={{ ...thStyle, textAlign:"center" }}>Decide Now</div>
+                  <div style={{ ...thStyle, textAlign:"center" }}>Phase</div>
+                  {PHASES.map(p=>(<div key={p.key} title={p.label} style={{ ...thStyle,textAlign:"center",fontSize:10,lineHeight:1.3,color:p.color }}>{p.short}</div>))}
+                </div>
+                {pendingTrainees.map((trainee,idx) => {
+                  const completedCount = getCompletedCount(trainee.phases);
+                  return (
+                    <div key={trainee.id} style={{
+                      display:"grid", gridTemplateColumns:"2fr 1.4fr 130px 90px repeat(11,64px)",
+                      padding:"13px 20px", gap:8, alignItems:"center",
+                      background: idx%2===0 ? "#fff" : "#fefce8",
+                      borderBottom:"1px solid #f1f5f9",
+                      cursor:"pointer", transition:"background 0.15s",
+                    }}
+                      onMouseEnter={e=>e.currentTarget.style.background="#fef9c3"}
+                      onMouseLeave={e=>e.currentTarget.style.background=idx%2===0?"#fff":"#fefce8"}
+                      onClick={()=>setOutcomeModal({ id: trainee.id, name: trainee.name })}
+                    >
+                      <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+                        <div style={{ width:34,height:34,borderRadius:10,background:"linear-gradient(135deg,#ca8a0422,#eab30844)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:13,color:"#ca8a04",flexShrink:0 }}>
+                          {trainee.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight:600,fontSize:14,color:"#1e293b" }}>{trainee.name}</div>
+                          <div style={{ fontSize:10,color:"#ca8a04",fontWeight:600 }}>⏳ Awaiting decision</div>
+                        </div>
+                      </div>
+                      <div style={{ fontSize:13,color:"#64748b",display:"flex",alignItems:"center",gap:6 }}>📱 {trainee.contact}</div>
+                      <div style={{ display:"flex",alignItems:"center",justifyContent:"center",gap:6 }} onClick={e=>e.stopPropagation()}>
+                        <button onClick={()=>confirmOutcome(trainee.id,"Selected")} title="Selected" style={{
+                          padding:"5px 10px", borderRadius:7, border:"none",
+                          background:"linear-gradient(135deg,#0d9488,#14b8a6)", color:"#fff",
+                          fontWeight:700, fontSize:11, cursor:"pointer", fontFamily:"inherit",
+                        }}>✅</button>
+                        <button onClick={()=>confirmOutcome(trainee.id,"Not Selected")} title="Not Selected" style={{
+                          padding:"5px 10px", borderRadius:7, border:"none",
+                          background:"linear-gradient(135deg,#d97706,#f59e0b)", color:"#fff",
+                          fontWeight:700, fontSize:11, cursor:"pointer", fontFamily:"inherit",
+                        }}>❌</button>
+                      </div>
+                      <div style={{ textAlign:"center" }}>
+                        <div style={{ display:"inline-block",background:"linear-gradient(135deg,#fefce8,#fde047)",color:"#ca8a04",fontWeight:700,fontSize:12,borderRadius:7,padding:"3px 8px" }}>Done ✓</div>
+                        <div style={{ fontSize:10,color:"#94a3b8",marginTop:2 }}>{completedCount}/{PHASES.length}</div>
+                      </div>
+                      {PHASES.map(p => (
+                        <div key={p.key} style={{ display:"flex",justifyContent:"center" }} onClick={e=>e.stopPropagation()}>
+                          <PhaseCheckbox checked={trainee.phases[p.key]} onChange={e=>updatePhase(trainee.id,p.key,e.target.checked)} overdue={false} />
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── Selected Section ── */}
         {selectedTrainees.length > 0 && (
@@ -1566,6 +1725,14 @@ export default function TraineePortal() {
           trainee={leavedModal}
           onConfirm={(reason)=>confirmLeaved(leavedModal.id, reason)}
           onClose={()=>setLeavedModal(null)}
+        />
+      )}
+
+      {outcomeModal && (
+        <OutcomeModal
+          trainee={outcomeModal}
+          onPick={(outcome)=>confirmOutcome(outcomeModal.id, outcome)}
+          onClose={()=>setOutcomeModal(null)}
         />
       )}
 
