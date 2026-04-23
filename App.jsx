@@ -975,6 +975,13 @@ export default function TraineePortal() {
     saveTrainee(updated);
   };
 
+  const changeOnboarder = (id, newOnboarder) => {
+    const t = trainees.find(tr => tr.id === id); if (!t) return;
+    const updated = { ...t, onboarder: newOnboarder };
+    setTrainees(ts => ts.map(tr => tr.id === id ? updated : tr));
+    saveTrainee(updated);
+  };
+
   const uniqueNames = ["All", ...trainees.map(t=>t.name)];
 
   if (dbLoading) return (
@@ -1103,7 +1110,7 @@ export default function TraineePortal() {
             </div>
             <div style={thStyle}>Trainee Name</div>
             <div style={thStyle}>Contact</div>
-            <div style={{ ...thStyle, textAlign:"center" }}>Status</div>
+            <div style={{ ...thStyle, textAlign:"center" }}>Onboarder</div>
             <div style={{ ...thStyle, textAlign:"center" }}>Phase</div>
             {PHASES.map(p=>(
               <div key={p.key} title={p.label} style={{ ...thStyle,textAlign:"center",fontSize:10,lineHeight:1.3,color:p.color }}>{p.short}</div>
@@ -1150,25 +1157,27 @@ export default function TraineePortal() {
                   </div>
                   <div>
                     <div style={{ fontWeight:600,fontSize:14,color:"#1e293b" }}>{trainee.name}</div>
-                    <div style={{ display:"flex",alignItems:"center",gap:4,marginTop:2 }}>
-                      {overdue && <span style={{ fontSize:10,color:"#ef4444",fontWeight:600 }}>⚠ Overdue</span>}
-                      {trainee.onboarder && <span style={{ fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:99,background: ONBOARDER_CONFIG[trainee.onboarder]?.bg||"#f1f5f9",color: ONBOARDER_CONFIG[trainee.onboarder]?.color||"#64748b" }}>👤 {trainee.onboarder}</span>}
-                    </div>
+                    {overdue && <div style={{ fontSize:10,color:"#ef4444",fontWeight:600,marginTop:2 }}>⚠ Overdue</div>}
                   </div>
                 </div>
 
                 {/* Contact */}
                 <div style={{ fontSize:13,color:"#64748b",display:"flex",alignItems:"center",gap:6 }}>📱 {trainee.contact}</div>
 
-                {/* Status — dropdown */}
+                {/* Onboarder — dropdown */}
                 <div style={{ display:"flex",alignItems:"center",justifyContent:"center" }} onClick={e=>e.stopPropagation()}>
-                  <select value={trainee.status} onChange={e=>changeTraineeStatus(trainee.id,e.target.value)} style={{
-                    padding:"4px 6px", borderRadius:7, fontSize:10, fontWeight:700, cursor:"pointer", outline:"none", fontFamily:"inherit",
-                    background:cfg.bg, color:cfg.color,
-                    border:`1.5px solid ${cfg.color}55`, maxWidth:95,
-                  }}>
-                    {STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
-                  </select>
+                  {(() => {
+                    const ob = ONBOARDER_CONFIG[trainee.onboarder];
+                    return (
+                      <select value={trainee.onboarder||""} onChange={e=>changeOnboarder(trainee.id,e.target.value)} style={{
+                        padding:"4px 6px", borderRadius:7, fontSize:11, fontWeight:700, cursor:"pointer", outline:"none", fontFamily:"inherit",
+                        background: ob?.bg||"#f8fafc", color: ob?.color||"#64748b",
+                        border:`1.5px solid ${ob?.color||"#cbd5e1"}55`, maxWidth:95,
+                      }}>
+                        {ONBOARDERS.map(o=><option key={o} value={o}>{o}</option>)}
+                      </select>
+                    );
+                  })()}
                 </div>
 
                 {/* Phase */}
