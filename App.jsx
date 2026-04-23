@@ -509,7 +509,7 @@ function AddTraineeModal({ onClose, onAdd, isAdmin, defaultOnboarder }) {
 }
 
 /* ─── Day Messages Panel ─── */
-function DayMessagesPanel({ dayMessages, setDayMessages, onSave, onReset, onClose, isAdmin, personalTabs }) {
+function DayMessagesPanel({ dayMessages, setDayMessages, onSave, onReset, onClose, isAdmin, personalTabs, showToast }) {
   const [selectedDay, setSelectedDay] = useState("intro");
   const [editing, setEditing]         = useState(false);
   const [draft, setDraft]             = useState("");
@@ -517,6 +517,7 @@ function DayMessagesPanel({ dayMessages, setDayMessages, onSave, onReset, onClos
 
   const dayLabels = {
     intro:"Introduction",
+    faq:"FAQ PDF",
     1:"Videos",
     2:"Interview",
     3:"Chat Part 1",
@@ -543,8 +544,8 @@ function DayMessagesPanel({ dayMessages, setDayMessages, onSave, onReset, onClos
 
         {/* Day Tabs */}
         <div style={{ display:"flex",gap:0,overflowX:"auto",borderBottom:"2px solid #e8eaf6",background:"#fafbff",padding:"0 16px",flexShrink:0 }}>
-          {["intro",1,2,3,4,5,7,8].map(d => {
-            const tabNames = { intro:"✨ Intro", 1:"Videos", 2:"Interview", 3:"Chat P1", 4:"Chat P2", 5:"Theme + Brand", 7:"Portfolio", 8:"Final Test" };
+          {["intro","faq",1,2,3,4,5,7,8].map(d => {
+            const tabNames = { intro:"✨ Intro", faq:"📄 FAQ PDF", 1:"Videos", 2:"Interview", 3:"Chat P1", 4:"Chat P2", 5:"Theme + Brand", 7:"Portfolio", 8:"Final Test" };
             return (
               <button key={d} onClick={()=>{setSelectedDay(d);setEditing(false);setCopied(false);}} style={{
                 padding:"12px 14px",border:"none",background:"transparent",
@@ -562,6 +563,9 @@ function DayMessagesPanel({ dayMessages, setDayMessages, onSave, onReset, onClos
 
         {/* Content */}
         <div style={{ flex:1,overflowY:"auto",padding:24 }}>
+          {selectedDay === "faq" ? (
+            <FAQPanel isAdmin={isAdmin} showToast={showToast} />
+          ) : (<>
           {/* Context banner — explains master vs personal copy */}
           <div style={{ marginBottom:14,padding:"10px 14px",borderRadius:10,fontSize:12,fontWeight:600,lineHeight:1.5,
             background: isAdmin ? "#eef2ff" : (personalTabs?.has(String(selectedDay)) ? "#fef9c3" : "#ecfdf5"),
@@ -649,8 +653,158 @@ function DayMessagesPanel({ dayMessages, setDayMessages, onSave, onReset, onClos
               </button>
             </div>
           )}
+          </>)}
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════ FAQ PDF PANEL ══════════════════════════════ */
+function FAQPanel({ isAdmin, showToast }) {
+  const [pdfs, setPdfs]         = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [uploading, setUploading] = useState(false);
+
+  const load = async () => {
+    const { data, error } = await supabase
+      .from("faq_pdfs").select("*").order("uploaded_at", { ascending: false });
+    if (error) { console.error("faq_pdfs load:", error); setLoading(false); return; }
+    setPdfs(data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    load();
+    const channel = supabase
+      .channel("faq-pdfs-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "faq_pdfs" }, () => load())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
+  const handleUpload = async (files) => {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    for (const file of files) {
+      if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+        showToast && showToast("error", `${file.name} is not a PDF`);
+        continue;
+      }
+      const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+      const { error: upErr } = await supabase.storage.from("faq-docs").upload(path, file, { cacheControl: "3600", upsert: false });
+      if (upErr) {
+        console.error("upload:", upErr);
+        showToast && showToast("error", `Upload failed: ${upErr.message}`);
+        continue;
+      }
+      const { data: { publicUrl } } = supabase.storage.from("faq-docs").getPublicUrl(path);
+      const { error: dbErr } = await supabase.from("faq_pdfs").insert({
+        file_name: file.name,
+        file_url: publicUrl,
+        storage_path: path,
+      });
+      if (dbErr) {
+        console.error("insert:", dbErr);
+        showToast && showToast("error", `Save failed: ${dbErr.message}`);
+        // Best-effort cleanup of orphaned file
+        await supabase.storage.from("faq-docs").remove([path]);
+        continue;
+      }
+    }
+    setUploading(false);
+    showToast && showToast("success", "PDF uploaded!");
+  };
+
+  const handleDelete = async (pdf) => {
+    if (!confirm(`Delete "${pdf.file_name}"?`)) return;
+    // Derive storage path: prefer stored column, else parse URL
+    const path = pdf.storage_path || (pdf.file_url.match(/\/faq-docs\/(.+)$/)?.[1]);
+    if (path) await supabase.storage.from("faq-docs").remove([path]);
+    const { error } = await supabase.from("faq_pdfs").delete().eq("id", pdf.id);
+    if (error) { showToast && showToast("error", `Delete failed: ${error.message}`); return; }
+    showToast && showToast("success", "PDF deleted");
+  };
+
+  const formatDate = (iso) => {
+    try { return new Date(iso).toLocaleDateString("en-IN", { day:"numeric", month:"short", year:"numeric" }); }
+    catch { return iso; }
+  };
+
+  return (
+    <div>
+      <div style={{ marginBottom:14,padding:"10px 14px",borderRadius:10,fontSize:12,fontWeight:600,lineHeight:1.5,
+        background:"#f0f9ff",color:"#0369a1",border:"1.5px solid #bae6fd" }}>
+        📄 FAQ documents — {isAdmin ? "upload PDFs that every employee can download." : "download reference PDFs uploaded by admin."}
+      </div>
+
+      {/* Admin upload area */}
+      {isAdmin && (
+        <label style={{
+          display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+          padding:"28px 20px",marginBottom:18,cursor: uploading ? "wait" : "pointer",gap:8,
+          border:"2px dashed #bae6fd",borderRadius:14,background: uploading ? "#eef2ff" : "#f0f9ff",
+          transition:"all 0.2s",
+        }}>
+          <div style={{ fontSize:32 }}>{uploading ? "⏳" : "📤"}</div>
+          <div style={{ fontSize:14,fontWeight:700,color:"#0369a1" }}>
+            {uploading ? "Uploading…" : "Click to upload PDF(s)"}
+          </div>
+          <div style={{ fontSize:11,color:"#64748b" }}>PDF files only · multiple allowed</div>
+          <input
+            type="file"
+            accept="application/pdf,.pdf"
+            multiple
+            disabled={uploading}
+            onChange={e => handleUpload(e.target.files)}
+            style={{ display:"none" }}
+          />
+        </label>
+      )}
+
+      {/* List */}
+      {loading ? (
+        <div style={{ textAlign:"center",padding:40,color:"#94a3b8",fontSize:13 }}>Loading…</div>
+      ) : pdfs.length === 0 ? (
+        <div style={{ textAlign:"center",padding:"50px 20px",background:"#fafbff",borderRadius:14,border:"2px dashed #e0e7ff" }}>
+          <div style={{ fontSize:40,marginBottom:10 }}>📂</div>
+          <div style={{ fontSize:14,color:"#64748b",fontWeight:600 }}>No FAQ documents uploaded yet.</div>
+        </div>
+      ) : (
+        <div style={{ border:"1.5px solid #e8eaf6",borderRadius:14,overflow:"hidden" }}>
+          {pdfs.map((pdf, idx) => (
+            <div key={pdf.id} style={{
+              display:"flex",alignItems:"center",gap:12,padding:"14px 16px",
+              background: idx % 2 === 0 ? "#fff" : "#fafbff",
+              borderBottom: idx === pdfs.length - 1 ? "none" : "1px solid #f1f5f9",
+            }}>
+              <div style={{ width:38,height:38,borderRadius:10,background:"linear-gradient(135deg,#fef2f2,#fee2e2)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0 }}>📕</div>
+              <div style={{ flex:1,minWidth:0 }}>
+                <div style={{ fontSize:13,fontWeight:700,color:"#1e293b",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }} title={pdf.file_name}>
+                  {pdf.file_name}
+                </div>
+                <div style={{ fontSize:11,color:"#94a3b8",marginTop:2 }}>
+                  Uploaded {formatDate(pdf.uploaded_at)}
+                </div>
+              </div>
+              <a
+                href={pdf.file_url}
+                download={pdf.file_name}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ padding:"7px 14px",borderRadius:8,background:"linear-gradient(135deg,#0ea5e9,#06b6d4)",color:"#fff",fontWeight:700,fontSize:12,textDecoration:"none",fontFamily:"inherit",boxShadow:"0 3px 10px #0ea5e933" }}
+              >
+                ⬇ Download
+              </a>
+              {isAdmin && (
+                <button onClick={()=>handleDelete(pdf)} style={{ padding:"7px 10px",borderRadius:8,border:"1.5px solid #fecaca",background:"#fff1f2",color:"#be123c",fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit" }}>
+                  🗑
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -2204,6 +2358,7 @@ function TraineePortal({ profile, onLogout }) {
         onClose={()=>setShowMessages(false)}
         isAdmin={isAdmin}
         personalTabs={personalTabs}
+        showToast={showToast}
       />}
       {notesModal && (
         <TraineeNotesModal
