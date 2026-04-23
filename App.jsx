@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
+import * as XLSX from "xlsx-js-style";
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
@@ -1288,6 +1289,153 @@ function TraineePortal({ profile, onLogout }) {
     }
   };
 
+  // ── Export to Excel (admin only) ──
+  const exportToExcel = () => {
+    const ORDER = ["Sarthak", "Archita", "Kritika"];
+    const HEADER_COLORS = {
+      Sarthak:    "6366F1", // indigo
+      Archita:    "EC4899", // pink
+      Kritika:    "10B981", // green
+      Unassigned: "64748B", // slate
+    };
+
+    // Build ordered groups
+    const groups = { Sarthak:[], Archita:[], Kritika:[], Unassigned:[] };
+    trainees.forEach(t => {
+      const k = ORDER.includes(t.onboarder) ? t.onboarder : (t.onboarder ? t.onboarder : "Unassigned");
+      if (!groups[k]) groups[k] = [];
+      groups[k].push(t);
+    });
+
+    // active → Pending → Selected → Not Selected → Leaved
+    const outcomeOrder = (s) => {
+      if (s === "Pending")      return 2;
+      if (s === "Selected")     return 3;
+      if (s === "Not Selected") return 4;
+      if (s === "Leaved")       return 5;
+      return 1; // active (anything else)
+    };
+
+    const columnHeaders = [
+      "Name","Contact","Onboarder","Phase/Day","Status/Outcome","Enroll Date",
+      "Shopify","A-Gravity","Videos","Certificate","Interview",
+      "Chat P1","Chat P2","S. Theme","Branded","Portfolio","Final Test",
+    ];
+
+    const phaseKeys = [
+      "shopifyStore","antiGravity","videosWatched","certificate","interviewPassed",
+      "chatPart1","chatPart2","shopifyTheme","brandedStore","portfolioReview","finalTest",
+    ];
+
+    const rows = [columnHeaders];
+
+    // Build ordered list of groups that actually contain trainees
+    const activeGroups = [...ORDER, "Unassigned"].filter(k => (groups[k] && groups[k].length > 0));
+    // Any extra custom onboarder names (employee names that aren't in ORDER)
+    Object.keys(groups).forEach(k => {
+      if (!activeGroups.includes(k) && groups[k].length > 0) activeGroups.push(k);
+    });
+
+    // Track section header row indices so we can style them after
+    const sectionMeta = []; // { rowIndex, group }
+
+    activeGroups.forEach(group => {
+      const headerRow = new Array(columnHeaders.length).fill("");
+      headerRow[0] = `── ${group} ──`;
+      sectionMeta.push({ rowIndex: rows.length, group });
+      rows.push(headerRow);
+
+      const sorted = [...groups[group]].sort((a, b) => outcomeOrder(a.status) - outcomeOrder(b.status));
+      sorted.forEach(t => {
+        const phaseDay = getPhaseDay(t.phases);
+        const done     = getCompletedCount(t.phases);
+        rows.push([
+          t.name || "",
+          t.contact || "",
+          t.onboarder || "",
+          done === PHASES.length ? `Done (${done}/${PHASES.length})` : `Day ${phaseDay} (${done}/${PHASES.length})`,
+          t.status || "",
+          t.enrollDate || t.enroll_date || "",
+          ...phaseKeys.map(k => t.phases?.[k] ? "✓" : "✗"),
+        ]);
+      });
+
+      rows.push(new Array(columnHeaders.length).fill("")); // blank separator
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+
+    // Column widths
+    ws["!cols"] = [
+      { wch: 26 }, // Name
+      { wch: 18 }, // Contact
+      { wch: 12 }, // Onboarder
+      { wch: 18 }, // Phase/Day
+      { wch: 16 }, // Status
+      { wch: 12 }, // Enroll Date
+      ...new Array(11).fill({ wch: 11 }),
+    ];
+
+    // Style top column-header row (row 0)
+    const topHeaderStyle = {
+      font: { bold: true, color: { rgb: "FFFFFF" }, sz: 12 },
+      fill: { fgColor: { rgb: "1E293B" } },
+      alignment: { horizontal: "center", vertical: "center", wrapText: true },
+      border: {
+        top:    { style: "thin", color: { rgb: "CBD5E1" } },
+        bottom: { style: "thin", color: { rgb: "CBD5E1" } },
+        left:   { style: "thin", color: { rgb: "CBD5E1" } },
+        right:  { style: "thin", color: { rgb: "CBD5E1" } },
+      },
+    };
+    columnHeaders.forEach((_, c) => {
+      const addr = XLSX.utils.encode_cell({ r: 0, c });
+      if (ws[addr]) ws[addr].s = topHeaderStyle;
+    });
+
+    // Style each section header row + merge across the full width
+    const merges = [];
+    sectionMeta.forEach(({ rowIndex, group }) => {
+      const color = HEADER_COLORS[group] || "6366F1";
+      const sectionStyle = {
+        font: { bold: true, color: { rgb: "FFFFFF" }, sz: 13 },
+        fill: { fgColor: { rgb: color } },
+        alignment: { horizontal: "center", vertical: "center" },
+      };
+      const addr = XLSX.utils.encode_cell({ r: rowIndex, c: 0 });
+      if (ws[addr]) ws[addr].s = sectionStyle;
+      merges.push({ s: { r: rowIndex, c: 0 }, e: { r: rowIndex, c: columnHeaders.length - 1 } });
+      // Row height for section headers
+      if (!ws["!rows"]) ws["!rows"] = [];
+      ws["!rows"][rowIndex] = { hpt: 22 };
+    });
+    ws["!merges"] = merges;
+
+    // Center-align checkbox columns
+    const dataStart = 1;
+    const dataEnd   = rows.length - 1;
+    for (let r = dataStart; r <= dataEnd; r++) {
+      // Skip section-header rows
+      if (sectionMeta.some(s => s.rowIndex === r)) continue;
+      for (let c = 6; c <= 16; c++) {
+        const addr = XLSX.utils.encode_cell({ r, c });
+        if (ws[addr]) {
+          ws[addr].s = {
+            font: { sz: 12, color: { rgb: ws[addr].v === "✓" ? "16A34A" : "DC2626" }, bold: true },
+            alignment: { horizontal: "center", vertical: "center" },
+          };
+        }
+      }
+    }
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Trainees");
+
+    const today = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `TrainFlow-Report-${today}.xlsx`);
+    showToast("success", "Excel exported!");
+  };
+
   const uniqueNames = ["All", ...trainees.map(t=>t.name)];
 
   if (dbLoading) return (
@@ -1315,9 +1463,14 @@ function TraineePortal({ profile, onLogout }) {
         </div>
         <div style={{ display:"flex",gap:10,alignItems:"center" }}>
           {isAdmin && (
-            <button onClick={()=>setShowAdminPanel(true)} title="User Management (Admin only)" style={{ display:"flex",alignItems:"center",gap:6,background:"#fff",color:"#6366f1",border:"1.5px solid #c7d2fe",borderRadius:10,padding:"9px 16px",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit" }}>
-              👥 Users
-            </button>
+            <>
+              <button onClick={exportToExcel} title="Export all trainees to Excel (Admin only)" style={{ display:"flex",alignItems:"center",gap:6,background:"linear-gradient(135deg,#16a34a,#22c55e)",color:"#fff",border:"none",borderRadius:10,padding:"9px 16px",fontWeight:700,fontSize:13,cursor:"pointer",boxShadow:"0 4px 14px #16a34a33",fontFamily:"inherit" }}>
+                📊 Export Excel
+              </button>
+              <button onClick={()=>setShowAdminPanel(true)} title="User Management (Admin only)" style={{ display:"flex",alignItems:"center",gap:6,background:"#fff",color:"#6366f1",border:"1.5px solid #c7d2fe",borderRadius:10,padding:"9px 16px",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit" }}>
+                👥 Users
+              </button>
+            </>
           )}
           <button onClick={()=>setShowMessages(true)} style={{ display:"flex",alignItems:"center",gap:8,background:"linear-gradient(135deg,#0ea5e9,#06b6d4)",color:"#fff",border:"none",borderRadius:10,padding:"9px 20px",fontWeight:700,fontSize:14,cursor:"pointer",boxShadow:"0 4px 16px #0ea5e933",fontFamily:"inherit" }}>📨 Day Messages</button>
           <button onClick={()=>setShowAdd(true)} style={{ display:"flex",alignItems:"center",gap:8,background:"linear-gradient(135deg,#6366f1,#8b5cf6)",color:"#fff",border:"none",borderRadius:10,padding:"9px 20px",fontWeight:700,fontSize:14,cursor:"pointer",boxShadow:"0 4px 16px #6366f133",fontFamily:"inherit" }}><span style={{ fontSize:18,lineHeight:1 }}>+</span> New Trainee</button>
