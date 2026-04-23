@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -458,7 +458,7 @@ function AddTraineeModal({ onClose, onAdd }) {
 }
 
 /* ─── Day Messages Panel ─── */
-function DayMessagesPanel({ dayMessages, setDayMessages, onClose }) {
+function DayMessagesPanel({ dayMessages, setDayMessages, onSave, onClose }) {
   const [selectedDay, setSelectedDay] = useState("intro");
   const [editing, setEditing]         = useState(false);
   const [draft, setDraft]             = useState("");
@@ -533,7 +533,7 @@ function DayMessagesPanel({ dayMessages, setDayMessages, onClose }) {
                 </>
               ) : (
                 <>
-                  <button onClick={()=>{setDayMessages(m=>({...m,[selectedDay]:draft}));setEditing(false);}} style={{ padding:"8px 18px",borderRadius:8,border:"none",background:"#22c55e",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit" }}>💾 Save</button>
+                  <button onClick={()=>{setDayMessages(m=>({...m,[selectedDay]:draft}));setEditing(false);onSave(selectedDay,draft);}} style={{ padding:"8px 18px",borderRadius:8,border:"none",background:"#22c55e",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit" }}>💾 Save</button>
                   <button onClick={()=>setEditing(false)} style={{ padding:"8px 18px",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#fff",color:"#64748b",fontWeight:600,fontSize:12,cursor:"pointer",fontFamily:"inherit" }}>Cancel</button>
                 </>
               )}
@@ -686,6 +686,8 @@ export default function TraineePortal() {
   const [showNotSelected,  setShowNotSelected]  = useState(false);
   const [showLeaved,       setShowLeaved]       = useState(false);
   const [leavedModal,      setLeavedModal]      = useState(null); // { id, name } — trainee being moved to Leaved
+  const [toast,            setToast]            = useState(null); // { type:"success"|"error", msg }
+  const pendingSaves = useRef(new Set()); // IDs currently mid-save — blocks real-time bounce-back
   const DEFAULT_MESSAGES = {
     intro:"Hi {name}! 👋 Welcome to the DMH Sales Training Program!\n\nWe're excited to have you on board. Here's a quick intro to what the program looks like:\n\n📌 This is a structured 8-day training.\n✅ Each day has specific tasks you need to complete.\n💬 I'll be messaging you daily with your tasks.\n🔓 Each phase unlocks after the previous one is done.\n\nGet ready — let's build something great together! 🚀",
     1:"Hi {name}! 👋 Welcome to Day 1 of the Sales Training Program. Today your tasks are:\n1️⃣ Build your Shopify Store\n2️⃣ Build your Anti-Gravity Website\n3️⃣ Watch the Day 1 Videos\n\nLet me know once done! 💪",
@@ -756,27 +758,29 @@ export default function TraineePortal() {
     leaved_date:       t.leavedDate   || "",
   });
 
-  // ── Sync trainees to Supabase whenever they change ──
-  useEffect(() => {
-    if (dbLoading || trainees.length === 0) return;
-    const sync = async () => {
-      await supabase.from("trainees").upsert(trainees.map(traineeToRow));
-    };
-    const timer = setTimeout(sync, 600); // debounce 600ms
-    return () => clearTimeout(timer);
-  }, [trainees, dbLoading]);
+  // ── Toast helpers ──
+  const showToast = (type, msg) => {
+    setToast({ type, msg });
+    setTimeout(() => setToast(null), 2500);
+  };
 
-  // ── Sync day messages to Supabase ──
-  useEffect(() => {
-    if (dbLoading) return;
-    const sync = async () => {
-      await Promise.all(Object.entries(dayMessages).map(([k, v]) =>
-        supabase.from("day_messages").upsert({ day_key: String(k), message: v })
-      ));
-    };
-    const timer = setTimeout(sync, 600);
-    return () => clearTimeout(timer);
-  }, [dayMessages, dbLoading]);
+  // ── Immediate per-action save helpers ──
+  const saveTrainee = async (trainee) => {
+    pendingSaves.current.add(trainee.id);
+    try {
+      const { error } = await supabase.from("trainees").upsert(traineeToRow(trainee));
+      if (error) showToast("error", "Save failed — check connection");
+      else        showToast("success", "Saved to server!");
+    } finally {
+      pendingSaves.current.delete(trainee.id);
+    }
+  };
+
+  const saveDayMessage = async (key, value) => {
+    const { error } = await supabase.from("day_messages").upsert({ day_key: String(key), message: value });
+    if (error) showToast("error", "Save failed — check connection");
+    else        showToast("success", "Saved to server!");
+  };
 
   // ── Real-time subscriptions — reflect changes from ANY device instantly ──
   useEffect(() => {
@@ -788,6 +792,8 @@ export default function TraineePortal() {
         (payload) => {
           if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
             const r = payload.new;
+            // Skip if this tab is mid-save for this row — we already have the latest state
+            if (pendingSaves.current.has(r.id)) return;
             const mapped = {
               ...r,
               phases:     { ...EMPTY_PHASES,      ...(r.phases      || {}) },
@@ -845,42 +851,74 @@ export default function TraineePortal() {
   const notSelectedTrainees = useMemo(() => filtered.filter(t => t.status === "Not Selected"), [filtered]);
   const leavedTrainees      = useMemo(() => filtered.filter(t => t.status === "Leaved"), [filtered]);
 
-  const updatePhase    = (id, key, val) => setTrainees(ts => ts.map(t => {
-    if (t.id !== id) return t;
+  const updatePhase = (id, key, val) => {
+    const t = trainees.find(t => t.id === id); if (!t) return;
     const newPhases = { ...t.phases, [key]: val };
-    const allDone = PHASES.every(p => newPhases[p.key]);
-    let newStatus = t.status;
-    // Don't auto-change status for Leaved or Dropped trainees
+    const allDone   = PHASES.every(p => newPhases[p.key]);
+    let newStatus   = t.status;
     if (t.status !== "Leaved" && t.status !== "Dropped") {
-      if (allDone && !GRADUATED_STATUSES.includes(t.status)) newStatus = "Selected";
-      else if (!allDone && GRADUATED_STATUSES.includes(t.status)) newStatus = "In Progress";
+      if (allDone  && !GRADUATED_STATUSES.includes(t.status)) newStatus = "Selected";
+      if (!allDone &&  GRADUATED_STATUSES.includes(t.status)) newStatus = "In Progress";
     }
-    return { ...t, phases: newPhases, status: newStatus };
-  }));
-  const addTrainee     = (data) => setTrainees(ts => [...ts, {...data, id:Date.now()}]);
-  const deleteTrainee  = (id)  => { setTrainees(ts=>ts.filter(t=>t.id!==id)); setDeleteConfirm(null); supabase.from("trainees").delete().eq("id", id); };
-  const bulkDelete     = ()    => { const ids=[...selectedRows]; setTrainees(ts=>ts.filter(t=>!selectedRows.has(t.id))); setSelectedRows(new Set()); setBulkDeleteConfirm(false); supabase.from("trainees").delete().in("id", ids); };
-  const updateTrainee  = (id, updates) => setTrainees(ts => ts.map(t => {
-    if (t.id !== id) return t;
+    const updated = { ...t, phases: newPhases, status: newStatus };
+    setTrainees(ts => ts.map(tr => tr.id === id ? updated : tr));
+    saveTrainee(updated);
+  };
+
+  const addTrainee = (data) => {
+    const newT = { ...data, id: Date.now() };
+    setTrainees(ts => [...ts, newT]);
+    saveTrainee(newT);
+  };
+
+  const deleteTrainee = async (id) => {
+    setTrainees(ts => ts.filter(t => t.id !== id));
+    setDeleteConfirm(null);
+    const { error } = await supabase.from("trainees").delete().eq("id", id);
+    if (error) showToast("error", "Delete failed — check connection");
+    else        showToast("success", "Deleted!");
+  };
+
+  const bulkDelete = async () => {
+    const ids = [...selectedRows];
+    setTrainees(ts => ts.filter(t => !selectedRows.has(t.id)));
+    setSelectedRows(new Set());
+    setBulkDeleteConfirm(false);
+    const { error } = await supabase.from("trainees").delete().in("id", ids);
+    if (error) showToast("error", "Delete failed — check connection");
+    else        showToast("success", `${ids.length} trainee${ids.length > 1 ? "s" : ""} deleted!`);
+  };
+
+  const updateTrainee = (id, updates) => {
+    const t = trainees.find(tr => tr.id === id); if (!t) return;
     const merged = { ...t, ...updates };
     const allDone = PHASES.every(p => merged.phases[p.key]);
     if (merged.status !== "Leaved" && merged.status !== "Dropped") {
-      if (allDone && !GRADUATED_STATUSES.includes(merged.status)) merged.status = "Selected";
-      else if (!allDone && GRADUATED_STATUSES.includes(merged.status)) merged.status = "In Progress";
+      if (allDone  && !GRADUATED_STATUSES.includes(merged.status)) merged.status = "Selected";
+      if (!allDone &&  GRADUATED_STATUSES.includes(merged.status)) merged.status = "In Progress";
     }
-    return merged;
-  }));
+    setTrainees(ts => ts.map(tr => tr.id === id ? merged : tr));
+    saveTrainee(merged);
+  };
+
   const changeTraineeStatus = (id, newStatus) => {
     if (newStatus === "Leaved") {
       const t = trainees.find(t => t.id === id);
       setLeavedModal({ id, name: t?.name || "" });
       return;
     }
-    setTrainees(ts => ts.map(t => t.id === id ? { ...t, status: newStatus } : t));
+    const t = trainees.find(tr => tr.id === id); if (!t) return;
+    const updated = { ...t, status: newStatus };
+    setTrainees(ts => ts.map(tr => tr.id === id ? updated : tr));
+    saveTrainee(updated);
   };
+
   const confirmLeaved = (id, reason) => {
-    setTrainees(ts => ts.map(t => t.id === id ? { ...t, status: "Leaved", leavedReason: reason, leavedDate: new Date().toISOString().slice(0,10) } : t));
+    const t = trainees.find(tr => tr.id === id); if (!t) return;
+    const updated = { ...t, status: "Leaved", leavedReason: reason, leavedDate: new Date().toISOString().slice(0,10) };
+    setTrainees(ts => ts.map(tr => tr.id === id ? updated : tr));
     setLeavedModal(null);
+    saveTrainee(updated);
   };
 
   const uniqueNames = ["All", ...trainees.map(t=>t.name)];
@@ -1399,7 +1437,7 @@ export default function TraineePortal() {
 
       {/* ── Modals ── */}
       {showAdd && <AddTraineeModal onClose={()=>setShowAdd(false)} onAdd={addTrainee}/>}
-      {showMessages && <DayMessagesPanel dayMessages={dayMessages} setDayMessages={setDayMessages} onClose={()=>setShowMessages(false)}/>}
+      {showMessages && <DayMessagesPanel dayMessages={dayMessages} setDayMessages={setDayMessages} onSave={saveDayMessage} onClose={()=>setShowMessages(false)}/>}
       {notesModal && (
         <TraineeNotesModal
           trainee={notesModal}
@@ -1443,6 +1481,26 @@ export default function TraineePortal() {
           onClose={()=>setLeavedModal(null)}
         />
       )}
+
+      {/* ── Toast notification ── */}
+      {toast && (
+        <div style={{
+          position:"fixed", bottom:24, right:24, zIndex:9999,
+          padding:"13px 22px",
+          background: toast.type === "success"
+            ? "linear-gradient(135deg,#22c55e,#16a34a)"
+            : "linear-gradient(135deg,#ef4444,#dc2626)",
+          color:"#fff", borderRadius:13, fontWeight:700, fontSize:14,
+          boxShadow: toast.type === "success" ? "0 8px 28px #22c55e44" : "0 8px 28px #ef444444",
+          display:"flex", alignItems:"center", gap:9,
+          fontFamily:"'DM Sans',sans-serif",
+          animation:"tfToastIn 0.25s ease",
+          userSelect:"none",
+        }}>
+          {toast.type === "success" ? "✅" : "❌"} {toast.msg}
+        </div>
+      )}
+      <style>{`@keyframes tfToastIn{from{transform:translateX(110%);opacity:0}to{transform:translateX(0);opacity:1}}`}</style>
     </div>
   );
 }
