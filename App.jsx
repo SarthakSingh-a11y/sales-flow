@@ -759,14 +759,34 @@ function LoginPage({ onLogin, error, busy }) {
           <p style={{ margin:"6px 0 0",fontSize:14,color:"#94a3b8" }}>Sign in to continue</p>
         </div>
         <div style={{ marginBottom:14 }}>
-          <label style={{ display:"block",fontSize:13,fontWeight:600,color:"#475569",marginBottom:6 }}>Email</label>
-          <input type="email" required autoFocus value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@company.com"
-            style={{ width:"100%",padding:"11px 14px",border:"2px solid #e2e8f0",borderRadius:11,fontSize:14,color:"#1e293b",outline:"none",boxSizing:"border-box",fontFamily:"inherit" }}/>
+          <label htmlFor="tf-login-email" style={{ display:"block",fontSize:13,fontWeight:600,color:"#475569",marginBottom:6 }}>Email</label>
+          <input
+            id="tf-login-email"
+            name="email"
+            type="email"
+            autoComplete="username"
+            inputMode="email"
+            required
+            autoFocus
+            value={email}
+            onChange={e=>setEmail(e.target.value)}
+            placeholder="you@company.com"
+            style={{ width:"100%",padding:"11px 44px 11px 14px",border:"2px solid #e2e8f0",borderRadius:11,fontSize:14,color:"#1e293b",outline:"none",boxSizing:"border-box",fontFamily:"inherit" }}
+          />
         </div>
         <div style={{ marginBottom:18 }}>
-          <label style={{ display:"block",fontSize:13,fontWeight:600,color:"#475569",marginBottom:6 }}>Password</label>
-          <input type="password" required value={password} onChange={e=>setPassword(e.target.value)} placeholder="••••••••"
-            style={{ width:"100%",padding:"11px 14px",border:"2px solid #e2e8f0",borderRadius:11,fontSize:14,color:"#1e293b",outline:"none",boxSizing:"border-box",fontFamily:"inherit" }}/>
+          <label htmlFor="tf-login-pw" style={{ display:"block",fontSize:13,fontWeight:600,color:"#475569",marginBottom:6 }}>Password</label>
+          <input
+            id="tf-login-pw"
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={e=>setPassword(e.target.value)}
+            placeholder="••••••••"
+            style={{ width:"100%",padding:"11px 44px 11px 14px",border:"2px solid #e2e8f0",borderRadius:11,fontSize:14,color:"#1e293b",outline:"none",boxSizing:"border-box",fontFamily:"inherit" }}
+          />
         </div>
         {error && (
           <div style={{ marginBottom:14,padding:"10px 14px",background:"#fef2f2",border:"1.5px solid #fecaca",borderRadius:10,color:"#dc2626",fontSize:13,fontWeight:600 }}>
