@@ -711,57 +711,21 @@ export default function TraineePortal() {
   });
 
   // ── Load data from Supabase on mount ──
+  // Supabase is the ONLY source of truth. No local fallback, no seed inserts.
   useEffect(() => {
     const load = async () => {
       setDbLoading(true);
       try {
-        // .limit(10000) avoids the default PostgREST 1000-row cap
+        // .limit(10000) bypasses the default PostgREST 1000-row cap
         const [{ data: tData }, { data: mData }] = await Promise.all([
           supabase.from("trainees").select("*").order("created_at", { ascending: true }).limit(10000),
           supabase.from("day_messages").select("*"),
         ]);
 
-        // ── One-time localStorage → Supabase migration ──
-        // Runs every startup; upserts any local trainee not yet in Supabase,
-        // then reloads so all devices see the full list.
-        try {
-          const ls = localStorage.getItem("trainee_portal_data");
-          if (ls) {
-            const localList = JSON.parse(ls);
-            if (localList && localList.length > 0) {
-              const remoteIds = new Set((tData || []).map(t => String(t.id)));
-              const missing   = localList.filter(t => !remoteIds.has(String(t.id)));
-              if (missing.length > 0) {
-                const rows = missing.map(t => ({
-                  id:                t.id,
-                  name:              t.name,
-                  contact:           t.contact,
-                  status:            t.status,
-                  enroll_date:       t.enrollDate  || t.enroll_date  || "",
-                  notes:             t.notes || "",
-                  phases:            { ...EMPTY_PHASES,     ...(t.phases     || {}) },
-                  phase_notes:       { ...EMPTY_PHASE_NOTES, ...(t.phaseNotes || t.phase_notes || {}) },
-                  certificate_image: t.certificateImage || t.certificate_image || "",
-                  certificate_text:  t.certificateText  || t.certificate_text  || "",
-                  leaved_reason:     t.leavedReason || t.leaved_reason || "",
-                  leaved_date:       t.leavedDate   || t.leaved_date   || "",
-                }));
-                await supabase.from("trainees").upsert(rows);
-                // Reload the now-complete list from Supabase
-                const { data: fresh } = await supabase
-                  .from("trainees").select("*").order("created_at", { ascending: true }).limit(10000);
-                setTrainees((fresh || []).map(rowToTrainee));
-                setDbLoading(false);
-                return; // skip the rest of the load — we already set state
-              }
-            }
-          }
-        } catch (migErr) { console.warn("Migration skipped:", migErr); }
-
-        // ── Always use Supabase as source of truth — no local fallback ──
+        // Trainees: read from Supabase only — empty DB = empty list
         setTrainees((tData || []).map(rowToTrainee));
 
-        // Day messages: merge DB values over defaults
+        // Day messages: merge DB values over built-in defaults
         if (mData && mData.length > 0) {
           const msgs = {};
           mData.forEach(r => {
@@ -769,11 +733,6 @@ export default function TraineePortal() {
             msgs[k] = r.message;
           });
           setDayMessages(prev => ({ ...prev, ...msgs }));
-        } else {
-          // Seed default messages into Supabase on first run
-          await Promise.all(Object.entries(DEFAULT_MESSAGES).map(([k, v]) =>
-            supabase.from("day_messages").upsert({ day_key: String(k), message: v })
-          ));
         }
       } catch (e) { console.error("Supabase load error:", e); }
       setDbLoading(false);
