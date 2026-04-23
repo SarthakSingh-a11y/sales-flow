@@ -1620,7 +1620,10 @@ function TraineePortal({ profile, onLogout }) {
                         </div>
                         <div>
                           <div style={{ fontWeight:600,fontSize:14,color:"#1e293b" }}>{trainee.name}</div>
-                          <div style={{ fontSize:10,color:"#ca8a04",fontWeight:600 }}>⏳ Awaiting decision</div>
+                          <div style={{ display:"flex",alignItems:"center",gap:5,marginTop:2,flexWrap:"wrap" }}>
+                            <span style={{ fontSize:10,color:"#ca8a04",fontWeight:600 }}>⏳ Awaiting decision</span>
+                            {trainee.onboarder && <span style={{ fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:99,background: ONBOARDER_CONFIG[trainee.onboarder]?.bg||"#f1f5f9",color: ONBOARDER_CONFIG[trainee.onboarder]?.color||"#64748b" }}>👤 {trainee.onboarder}</span>}
+                          </div>
                         </div>
                       </div>
                       <div style={{ fontSize:13,color:"#64748b",display:"flex",alignItems:"center",gap:6 }}>📱 {trainee.contact}</div>
@@ -1714,7 +1717,10 @@ function TraineePortal({ profile, onLogout }) {
                         </div>
                         <div>
                           <div style={{ fontWeight:600,fontSize:14,color:"#1e293b" }}>{trainee.name}</div>
-                          <div style={{ fontSize:10,color:"#0d9488",fontWeight:600 }}>✅ Selected</div>
+                          <div style={{ display:"flex",alignItems:"center",gap:5,marginTop:2,flexWrap:"wrap" }}>
+                            <span style={{ fontSize:10,color:"#0d9488",fontWeight:600 }}>✅ Selected</span>
+                            {trainee.onboarder && <span style={{ fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:99,background: ONBOARDER_CONFIG[trainee.onboarder]?.bg||"#f1f5f9",color: ONBOARDER_CONFIG[trainee.onboarder]?.color||"#64748b" }}>👤 {trainee.onboarder}</span>}
+                          </div>
                         </div>
                       </div>
                       <div style={{ fontSize:13,color:"#64748b",display:"flex",alignItems:"center",gap:6 }}>📱 {trainee.contact}</div>
@@ -1805,7 +1811,10 @@ function TraineePortal({ profile, onLogout }) {
                         </div>
                         <div>
                           <div style={{ fontWeight:600,fontSize:14,color:"#1e293b" }}>{trainee.name}</div>
-                          <div style={{ fontSize:10,color:"#d97706",fontWeight:600 }}>❌ Not Selected</div>
+                          <div style={{ display:"flex",alignItems:"center",gap:5,marginTop:2,flexWrap:"wrap" }}>
+                            <span style={{ fontSize:10,color:"#d97706",fontWeight:600 }}>❌ Not Selected</span>
+                            {trainee.onboarder && <span style={{ fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:99,background: ONBOARDER_CONFIG[trainee.onboarder]?.bg||"#f1f5f9",color: ONBOARDER_CONFIG[trainee.onboarder]?.color||"#64748b" }}>👤 {trainee.onboarder}</span>}
+                          </div>
                         </div>
                       </div>
                       <div style={{ fontSize:13,color:"#64748b",display:"flex",alignItems:"center",gap:6 }}>📱 {trainee.contact}</div>
@@ -1898,7 +1907,10 @@ function TraineePortal({ profile, onLogout }) {
                         </div>
                         <div>
                           <div style={{ fontWeight:600,fontSize:14,color:"#1e293b" }}>{trainee.name}</div>
-                          <div style={{ fontSize:10,color:"#be123c",fontWeight:600 }}>🚪 Leaved{trainee.leavedDate ? ` · ${new Date(trainee.leavedDate).toLocaleDateString("en-IN",{day:"numeric",month:"short"})}` : ""}</div>
+                          <div style={{ display:"flex",alignItems:"center",gap:5,marginTop:2,flexWrap:"wrap" }}>
+                            <span style={{ fontSize:10,color:"#be123c",fontWeight:600 }}>🚪 Leaved{trainee.leavedDate ? ` · ${new Date(trainee.leavedDate).toLocaleDateString("en-IN",{day:"numeric",month:"short"})}` : ""}</span>
+                            {trainee.onboarder && <span style={{ fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:99,background: ONBOARDER_CONFIG[trainee.onboarder]?.bg||"#f1f5f9",color: ONBOARDER_CONFIG[trainee.onboarder]?.color||"#64748b" }}>👤 {trainee.onboarder}</span>}
+                          </div>
                         </div>
                       </div>
                       <div style={{ fontSize:13,color:"#64748b",display:"flex",alignItems:"center",gap:6 }}>📱 {trainee.contact}</div>
