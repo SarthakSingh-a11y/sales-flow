@@ -509,7 +509,7 @@ function AddTraineeModal({ onClose, onAdd, isAdmin, defaultOnboarder }) {
 }
 
 /* ─── Day Messages Panel ─── */
-function DayMessagesPanel({ dayMessages, setDayMessages, onSave, onClose }) {
+function DayMessagesPanel({ dayMessages, setDayMessages, onSave, onReset, onClose, isAdmin, personalTabs }) {
   const [selectedDay, setSelectedDay] = useState("intro");
   const [editing, setEditing]         = useState(false);
   const [draft, setDraft]             = useState("");
@@ -562,9 +562,22 @@ function DayMessagesPanel({ dayMessages, setDayMessages, onSave, onClose }) {
 
         {/* Content */}
         <div style={{ flex:1,overflowY:"auto",padding:24 }}>
+          {/* Context banner — explains master vs personal copy */}
+          <div style={{ marginBottom:14,padding:"10px 14px",borderRadius:10,fontSize:12,fontWeight:600,lineHeight:1.5,
+            background: isAdmin ? "#eef2ff" : (personalTabs?.has(String(selectedDay)) ? "#fef9c3" : "#ecfdf5"),
+            color: isAdmin ? "#4338ca" : (personalTabs?.has(String(selectedDay)) ? "#a16207" : "#047857"),
+            border: `1.5px solid ${isAdmin ? "#c7d2fe" : (personalTabs?.has(String(selectedDay)) ? "#fde047" : "#a7f3d0")}`,
+          }}>
+            {isAdmin
+              ? "🛡 You're editing the global MASTER template. Changes apply to every employee who hasn't personally edited this message."
+              : (personalTabs?.has(String(selectedDay))
+                  ? "✏️ You're viewing YOUR personal copy. Admin's master updates will not overwrite it until you reset."
+                  : "📄 You're viewing the admin's master template. Saving will create your personal copy.")}
+          </div>
+
           <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16 }}>
             <div style={{ fontWeight:700,fontSize:16,color:"#1e293b" }}>{dayLabels[selectedDay]}</div>
-            <div style={{ display:"flex",gap:8 }}>
+            <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
               {!editing ? (
                 <>
                   {currentMsg && (
@@ -578,13 +591,19 @@ function DayMessagesPanel({ dayMessages, setDayMessages, onSave, onClose }) {
                       {copied ? "✅ Copied!" : "📋 Copy"}
                     </button>
                   )}
+                  {/* Employee-only: Reset to Default — visible when they have a personal override */}
+                  {!isAdmin && personalTabs?.has(String(selectedDay)) && (
+                    <button onClick={()=>{ if(confirm("Remove your personal copy and revert to the admin's master version?")) onReset(selectedDay); }} style={{ padding:"8px 14px",borderRadius:8,border:"1.5px solid #fde047",background:"#fefce8",color:"#a16207",fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit" }}>
+                      ↺ Reset to Default
+                    </button>
+                  )}
                   <button onClick={()=>{setEditing(true);setDraft(currentMsg);}} style={{ padding:"8px 18px",borderRadius:8,border:"1.5px solid #c7d2fe",background:"#eef2ff",color:"#6366f1",fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit" }}>
                     ✏️ {currentMsg ? "Edit" : "Write"}
                   </button>
                 </>
               ) : (
                 <>
-                  <button onClick={()=>{setDayMessages(m=>({...m,[selectedDay]:draft}));setEditing(false);onSave(selectedDay,draft);}} style={{ padding:"8px 18px",borderRadius:8,border:"none",background:"#22c55e",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit" }}>💾 Save</button>
+                  <button onClick={()=>{setEditing(false);onSave(selectedDay,draft);}} style={{ padding:"8px 18px",borderRadius:8,border:"none",background:"#22c55e",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit" }}>💾 Save</button>
                   <button onClick={()=>setEditing(false)} style={{ padding:"8px 18px",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#fff",color:"#64748b",fontWeight:600,fontSize:12,cursor:"pointer",fontFamily:"inherit" }}>Cancel</button>
                 </>
               )}
@@ -992,7 +1011,21 @@ function TraineePortal({ profile, onLogout }) {
     7:"Hi {name}! 🖼️ Day 7 — Portfolio Store Review.\n\nReview your portfolio store and make any final improvements.\n\nShare the link when done! 🔗",
     8:"Hi {name}! 🏆 Final Test Time!\n\nYou need to score 80%+ to pass. Take your time and trust your training.\n\nGood luck! 🎯",
   };
-  const [dayMessages, setDayMessages] = useState(DEFAULT_MESSAGES);
+  const [dayMessages,  setDayMessages]  = useState(DEFAULT_MESSAGES);
+  const [personalTabs, setPersonalTabs] = useState(new Set()); // tab keys where this user has a personal override
+  const masterRef   = useRef({}); // { tab(string): content } — admin master copies
+  const personalRef = useRef({}); // { tab(string): content } — current user's personal overrides
+
+  // Normalize "1" → 1 but keep "intro" as "intro"
+  const normKey = (k) => (k === null || k === undefined) ? k : (isNaN(k) ? k : Number(k));
+
+  const recomputeDayMessages = () => {
+    const merged = { ...DEFAULT_MESSAGES };
+    Object.entries(masterRef.current).forEach(([k, v])   => { merged[normKey(k)] = v; });
+    Object.entries(personalRef.current).forEach(([k, v]) => { merged[normKey(k)] = v; }); // personal wins
+    setDayMessages(merged);
+    setPersonalTabs(new Set(Object.keys(personalRef.current)));
+  };
 
   // ── Helper: map a DB row → app trainee object ──
   const rowToTrainee = (t) => {
@@ -1031,14 +1064,20 @@ function TraineePortal({ profile, onLogout }) {
         // Trainees: read from Supabase only — empty DB = empty list
         setTrainees((tData || []).map(rowToTrainee));
 
-        // Day messages: merge DB values over built-in defaults
+        // Day messages: new schema → { user_id, tab, content, is_master }
+        // If an older schema row slips through (day_key/message), ignore it silently.
         if (mData && mData.length > 0) {
-          const msgs = {};
-          mData.forEach(r => {
-            const k = isNaN(r.day_key) ? r.day_key : Number(r.day_key);
-            msgs[k] = r.message;
+          // Sort newest-first so the latest master wins if multiple admins saved
+          const sorted = [...mData].sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0));
+          sorted.forEach(r => {
+            const tab = r.tab; if (!tab) return;
+            if (r.is_master) {
+              if (!masterRef.current[tab]) masterRef.current[tab] = r.content;
+            } else if (r.user_id === profile?.id) {
+              personalRef.current[tab] = r.content;
+            }
           });
-          setDayMessages(prev => ({ ...prev, ...msgs }));
+          recomputeDayMessages();
         }
       } catch (e) { console.error("Supabase load error:", e); }
       setDbLoading(false);
@@ -1092,14 +1131,55 @@ function TraineePortal({ profile, onLogout }) {
     }
   };
 
+  // Admin → upsert the global master for this tab (only 1 master per tab exists,
+  //         enforced by partial unique index; we delete-then-insert to reassign ownership).
+  // Employee → upsert their own personal copy; master is untouched.
   const saveDayMessage = async (key, value) => {
-    const { error } = await supabase.from("day_messages").upsert({ day_key: String(key), message: value });
-    if (error) {
-      console.error("saveDayMessage error:", error.message, error.details);
-      showToast("error", `Save failed: ${error.message || "check connection"}`);
+    if (!profile?.id) { showToast("error", "Not signed in"); return; }
+    const tab = String(key);
+
+    if (isAdmin) {
+      // Remove any existing master row for this tab (regardless of which admin authored it)
+      await supabase.from("day_messages").delete().eq("tab", tab).eq("is_master", true);
+      const { error } = await supabase.from("day_messages").insert({
+        user_id: profile.id, tab, content: value, is_master: true, updated_at: new Date().toISOString(),
+      });
+      if (error) {
+        console.error("saveDayMessage (admin) error:", error);
+        showToast("error", `Save failed: ${error.message || "check connection"}`);
+        return;
+      }
+      masterRef.current[tab] = value;
     } else {
-      showToast("success", "Saved to server!");
+      const { error } = await supabase.from("day_messages").upsert({
+        user_id: profile.id, tab, content: value, is_master: false, updated_at: new Date().toISOString(),
+      }, { onConflict: "user_id,tab" });
+      if (error) {
+        console.error("saveDayMessage (employee) error:", error);
+        showToast("error", `Save failed: ${error.message || "check connection"}`);
+        return;
+      }
+      personalRef.current[tab] = value;
     }
+    recomputeDayMessages();
+    showToast("success", "Saved to server!");
+  };
+
+  // Employee: delete personal copy → fall back to master
+  const resetDayMessage = async (key) => {
+    if (!profile?.id) return;
+    const tab = String(key);
+    const { error } = await supabase.from("day_messages")
+      .delete()
+      .eq("user_id", profile.id).eq("tab", tab).eq("is_master", false);
+    if (error) {
+      console.error("resetDayMessage error:", error);
+      showToast("error", `Reset failed: ${error.message || "check connection"}`);
+      return;
+    }
+    delete personalRef.current[tab];
+    recomputeDayMessages();
+    showToast("success", "Reverted to default");
   };
 
   // ── Real-time subscriptions — reflect changes from ANY device instantly ──
@@ -1141,13 +1221,23 @@ function TraineePortal({ profile, onLogout }) {
         { event: "*", schema: "public", table: "day_messages" },
         (payload) => {
           if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
-            const { day_key, message } = payload.new;
-            // Convert numeric day_key back to number if needed to match state keys
-            const k = isNaN(day_key) ? day_key : Number(day_key);
-            setDayMessages(prev => ({ ...prev, [k]: message }));
+            const r = payload.new;
+            if (!r?.tab) return;
+            if (r.is_master) {
+              masterRef.current[r.tab] = r.content;
+            } else if (r.user_id === profile?.id) {
+              personalRef.current[r.tab] = r.content;
+            } else {
+              return; // someone else's personal copy — RLS should already filter this out
+            }
+            recomputeDayMessages();
           } else if (payload.eventType === "DELETE") {
-            const k = isNaN(payload.old.day_key) ? payload.old.day_key : Number(payload.old.day_key);
-            setDayMessages(prev => { const next = { ...prev }; delete next[k]; return next; });
+            const r = payload.old;
+            if (!r?.tab) return;
+            if (r.is_master) delete masterRef.current[r.tab];
+            else if (r.user_id === profile?.id) delete personalRef.current[r.tab];
+            else return;
+            recomputeDayMessages();
           }
         }
       )
@@ -2106,7 +2196,15 @@ function TraineePortal({ profile, onLogout }) {
 
       {/* ── Modals ── */}
       {showAdd && <AddTraineeModal onClose={()=>setShowAdd(false)} onAdd={addTrainee} isAdmin={isAdmin} defaultOnboarder={profile?.name || ""}/>}
-      {showMessages && <DayMessagesPanel dayMessages={dayMessages} setDayMessages={setDayMessages} onSave={saveDayMessage} onClose={()=>setShowMessages(false)}/>}
+      {showMessages && <DayMessagesPanel
+        dayMessages={dayMessages}
+        setDayMessages={setDayMessages}
+        onSave={saveDayMessage}
+        onReset={resetDayMessage}
+        onClose={()=>setShowMessages(false)}
+        isAdmin={isAdmin}
+        personalTabs={personalTabs}
+      />}
       {notesModal && (
         <TraineeNotesModal
           trainee={notesModal}
