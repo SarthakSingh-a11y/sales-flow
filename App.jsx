@@ -823,8 +823,12 @@ export default function TraineePortal() {
     pendingSaves.current.add(trainee.id);
     try {
       const { error } = await supabase.from("trainees").upsert(traineeToRow(trainee));
-      if (error) showToast("error", "Save failed — check connection");
-      else        showToast("success", "Saved to server!");
+      if (error) {
+        console.error("saveTrainee error:", error.message, error.details, error.hint, traineeToRow(trainee));
+        showToast("error", `Save failed: ${error.message || "check connection"}`);
+      } else {
+        showToast("success", "Saved to server!");
+      }
     } finally {
       pendingSaves.current.delete(trainee.id);
     }
@@ -832,8 +836,12 @@ export default function TraineePortal() {
 
   const saveDayMessage = async (key, value) => {
     const { error } = await supabase.from("day_messages").upsert({ day_key: String(key), message: value });
-    if (error) showToast("error", "Save failed — check connection");
-    else        showToast("success", "Saved to server!");
+    if (error) {
+      console.error("saveDayMessage error:", error.message, error.details);
+      showToast("error", `Save failed: ${error.message || "check connection"}`);
+    } else {
+      showToast("success", "Saved to server!");
+    }
   };
 
   // ── Real-time subscriptions — reflect changes from ANY device instantly ──
@@ -975,11 +983,23 @@ export default function TraineePortal() {
     saveTrainee(updated);
   };
 
-  const changeOnboarder = (id, newOnboarder) => {
+  const changeOnboarder = async (id, newOnboarder) => {
     const t = trainees.find(tr => tr.id === id); if (!t) return;
-    const updated = { ...t, onboarder: newOnboarder };
-    setTrainees(ts => ts.map(tr => tr.id === id ? updated : tr));
-    saveTrainee(updated);
+    // Optimistic local update
+    setTrainees(ts => ts.map(tr => tr.id === id ? { ...tr, onboarder: newOnboarder } : tr));
+    // Surgical update — only touches the onboarder column, nothing else
+    const { error } = await supabase
+      .from("trainees")
+      .update({ onboarder: newOnboarder })
+      .eq("id", id);
+    if (error) {
+      console.error("changeOnboarder error:", error.message, error.details, error.hint, { id, newOnboarder });
+      showToast("error", `Save failed: ${error.message || "check connection"}`);
+      // Roll back optimistic update
+      setTrainees(ts => ts.map(tr => tr.id === id ? { ...tr, onboarder: t.onboarder } : tr));
+    } else {
+      showToast("success", "Saved to server!");
+    }
   };
 
   const uniqueNames = ["All", ...trainees.map(t=>t.name)];
