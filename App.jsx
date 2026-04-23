@@ -35,6 +35,13 @@ const PHASE_REMARK_COL = {
   finalTest:       "final_test_remarks",
 };
 
+const ONBOARDERS = ["Sarthak", "Archita", "Kritika"];
+const ONBOARDER_CONFIG = {
+  Sarthak: { color: "#6366f1", bg: "#eef2ff" },
+  Archita: { color: "#0ea5e9", bg: "#f0f9ff" },
+  Kritika: { color: "#ec4899", bg: "#fdf2f8" },
+};
+
 const STATUSES = ["Not Started", "In Progress", "Completed", "Dropped", "Interview Pending", "Selected", "Not Selected", "Leaved"];
 const GRADUATED_STATUSES = ["Selected", "Not Selected"];
 const BOTTOM_SECTION_STATUSES = ["Selected", "Not Selected", "Leaved"];
@@ -167,8 +174,13 @@ function TraineeNotesModal({ trainee, onClose, onUpdate }) {
               <div style={{ fontFamily:"'Sora',sans-serif", fontWeight:800, fontSize:18, color:"#1e293b" }}>
                 📋 {trainee.name}
               </div>
-              <div style={{ fontSize:12, color:"#94a3b8", marginTop:1 }}>
-                📱 {trainee.contact} · 📅 Enrolled {new Date(trainee.enrollDate).toLocaleDateString("en-PK",{day:"numeric",month:"short",year:"numeric"})}
+              <div style={{ fontSize:12, color:"#94a3b8", marginTop:1, display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                📱 {trainee.contact} · 📅 Enrolled {new Date(trainee.enrollDate || trainee.enroll_date).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"})}
+                {trainee.onboarder && (
+                  <span style={{ fontWeight:700, padding:"2px 8px", borderRadius:99, background: ONBOARDER_CONFIG[trainee.onboarder]?.bg||"#f1f5f9", color: ONBOARDER_CONFIG[trainee.onboarder]?.color||"#64748b", fontSize:11 }}>
+                    👤 {trainee.onboarder}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -438,8 +450,10 @@ function TraineeNotesModal({ trainee, onClose, onUpdate }) {
 
 /* ─── Add Trainee Modal ─── */
 function AddTraineeModal({ onClose, onAdd }) {
-  const [form, setForm] = useState({ name:"", contact:"", status:"Not Started", enrollDate:new Date().toISOString().slice(0,10), notes:"" });
+  const [form, setForm] = useState({ name:"", contact:"", onboarder:"", enrollDate:new Date().toISOString().slice(0,10), notes:"" });
   const set = (k,v) => setForm(f => ({...f,[k]:v}));
+  const canAdd = form.name.trim() && form.onboarder;
+  const ob = ONBOARDER_CONFIG[form.onboarder];
   return (
     <div style={{ position:"fixed",inset:0,background:"#0008",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center" }} onClick={onClose}>
       <div style={{ background:"#fff",borderRadius:20,padding:36,width:480,maxWidth:"95vw",boxShadow:"0 25px 60px #0003",fontFamily:"'DM Sans',sans-serif" }} onClick={e=>e.stopPropagation()}>
@@ -453,10 +467,16 @@ function AddTraineeModal({ onClose, onAdd }) {
             <input type={type} value={form[key]} onChange={e=>set(key,e.target.value)} placeholder={placeholder} style={{ width:"100%",padding:"10px 14px",border:"2px solid #e2e8f0",borderRadius:10,fontSize:14,color:"#1e293b",outline:"none",boxSizing:"border-box",fontFamily:"inherit" }}/>
           </div>
         ))}
+        {/* Onboarder — required */}
         <div style={{ marginBottom:16 }}>
-          <label style={{ display:"block",fontSize:13,fontWeight:600,color:"#475569",marginBottom:6 }}>Status</label>
-          <select value={form.status} onChange={e=>set("status",e.target.value)} style={{ width:"100%",padding:"10px 14px",border:"2px solid #e2e8f0",borderRadius:10,fontSize:14,color:"#1e293b",outline:"none",boxSizing:"border-box",background:"#fff",fontFamily:"inherit" }}>
-            {STATUSES.map(s=><option key={s}>{s}</option>)}
+          <label style={{ display:"block",fontSize:13,fontWeight:600,color:"#475569",marginBottom:6 }}>👤 Onboarder — Who is taking this training?</label>
+          <select
+            value={form.onboarder}
+            onChange={e=>set("onboarder",e.target.value)}
+            style={{ width:"100%",padding:"10px 14px",border: form.onboarder ? `2px solid ${ob?.color}88` : "2px solid #e2e8f0",borderRadius:10,fontSize:14,color: form.onboarder ? ob?.color : "#94a3b8",background: form.onboarder ? ob?.bg : "#fff",outline:"none",boxSizing:"border-box",fontFamily:"inherit",fontWeight: form.onboarder ? 700 : 400,cursor:"pointer" }}
+          >
+            <option value="">— Select onboarder —</option>
+            {ONBOARDERS.map(o=><option key={o} value={o}>{o}</option>)}
           </select>
         </div>
         <div style={{ marginBottom:24 }}>
@@ -465,7 +485,10 @@ function AddTraineeModal({ onClose, onAdd }) {
         </div>
         <div style={{ display:"flex",gap:12 }}>
           <button onClick={onClose} style={{ flex:1,padding:"11px",borderRadius:10,border:"2px solid #e2e8f0",background:"#fff",color:"#64748b",fontWeight:600,cursor:"pointer",fontSize:14,fontFamily:"inherit" }}>Cancel</button>
-          <button onClick={()=>{ if(form.name.trim()){ onAdd({...form,phases:{...EMPTY_PHASES},phaseNotes:{...EMPTY_PHASE_NOTES}}); onClose(); }}} style={{ flex:2,padding:"11px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#6366f1,#8b5cf6)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:14,fontFamily:"inherit",boxShadow:"0 4px 16px #6366f144" }}>+ Add Trainee</button>
+          <button
+            onClick={()=>{ if(canAdd){ onAdd({...form,status:"Not Started",phases:{...EMPTY_PHASES},phaseNotes:{...EMPTY_PHASE_NOTES}}); onClose(); }}}
+            style={{ flex:2,padding:"11px",borderRadius:10,border:"none",background: canAdd ? "linear-gradient(135deg,#6366f1,#8b5cf6)" : "#e2e8f0",color: canAdd ? "#fff" : "#94a3b8",fontWeight:700,cursor: canAdd ? "pointer" : "not-allowed",fontSize:14,fontFamily:"inherit",boxShadow: canAdd ? "0 4px 16px #6366f144" : "none",transition:"all 0.2s" }}
+          >+ Add Trainee</button>
         </div>
       </div>
     </div>
@@ -693,7 +716,7 @@ export default function TraineePortal() {
   const [deleteConfirm,  setDeleteConfirm]  = useState(null);   // trainee id
   const [filterName,     setFilterName]     = useState("All");
   const [filterStatus,   setFilterStatus]   = useState("All");
-  const [filterPhase,    setFilterPhase]    = useState("All");
+  const [filterOnboarder, setFilterOnboarder] = useState("All");
   const [search,         setSearch]         = useState("");
   const [selectedRows,   setSelectedRows]   = useState(new Set());
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
@@ -733,6 +756,7 @@ export default function TraineePortal() {
       certificateText:  t.certificate_text  || "",
       leavedReason:     t.leaved_reason || "",
       leavedDate:       t.leaved_date   || "",
+      onboarder:        t.onboarder || "",
     };
   };
 
@@ -773,14 +797,15 @@ export default function TraineePortal() {
       name:              t.name,
       contact:           t.contact,
       status:            t.status,
-      enroll_date:       t.enrollDate || t.enroll_date || "", // handle both camelCase & snake_case
+      enroll_date:       t.enrollDate || t.enroll_date || "",
       notes:             t.notes || "",
       phases:            t.phases || {},
-      phase_notes:       t.phaseNotes || {},                  // keep JSONB for backward compat
+      phase_notes:       t.phaseNotes || {},
       certificate_image: t.certificateImage || "",
       certificate_text:  t.certificateText  || "",
       leaved_reason:     t.leavedReason || "",
       leaved_date:       t.leavedDate   || "",
+      onboarder:         t.onboarder || "",
     };
     // Write every phase remark into its own dedicated column
     PHASES.forEach(p => { row[PHASE_REMARK_COL[p.key]] = t.phaseNotes?.[p.key] || ""; });
@@ -870,10 +895,10 @@ export default function TraineePortal() {
   const filtered = useMemo(() => trainees.filter(t => {
     if (filterName!=="All" && t.name!==filterName) return false;
     if (filterStatus!=="All" && t.status!==filterStatus) return false;
-    if (filterPhase!=="All") { const day=parseInt(filterPhase.replace("Day ","")); if(getPhaseDay(t.phases)!==day) return false; }
+    if (filterOnboarder!=="All" && t.onboarder!==filterOnboarder) return false;
     if (search && !t.name.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
-  }), [trainees, filterName, filterStatus, filterPhase, search]);
+  }), [trainees, filterName, filterStatus, filterOnboarder, search]);
 
   const activeTrainees      = useMemo(() => filtered.filter(t => !BOTTOM_SECTION_STATUSES.includes(t.status)), [filtered]);
   const selectedTrainees    = useMemo(() => filtered.filter(t => t.status === "Selected"), [filtered]);
@@ -951,7 +976,6 @@ export default function TraineePortal() {
   };
 
   const uniqueNames = ["All", ...trainees.map(t=>t.name)];
-  const uniqueDays  = ["All", ...Array.from(new Set(PHASES.map(p=>`Day ${p.day}`))).sort()];
 
   if (dbLoading) return (
     <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", background:"linear-gradient(160deg,#f8faff 0%,#f0f4ff 50%,#faf5ff 100%)", fontFamily:"'DM Sans',sans-serif", gap:16 }}>
@@ -1014,11 +1038,16 @@ export default function TraineePortal() {
 
         {/* ── Filters ── */}
         <div style={{ background:"#fff",borderRadius:16,padding:"16px 20px",border:"1.5px solid #e8eaf6",marginBottom:20,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap",boxShadow:"0 2px 12px #0000060a" }}>
-          {[{label:"Trainee",value:filterName,set:setFilterName,options:uniqueNames},{label:"Status",value:filterStatus,set:setFilterStatus,options:["All",...STATUSES]},{label:"Phase/Day",value:filterPhase,set:setFilterPhase,options:uniqueDays}].map(({label,value,set,options})=>(
+          {[{label:"Trainee",value:filterName,set:setFilterName,options:uniqueNames},{label:"Status",value:filterStatus,set:setFilterStatus,options:["All",...STATUSES]}].map(({label,value,set,options})=>(
             <select key={label} value={value} onChange={e=>set(e.target.value)} style={{ padding:"8px 14px",border:"1.5px solid #e2e8f0",borderRadius:9,fontSize:13,color:"#374151",background:"#f8fafc",outline:"none",fontFamily:"inherit",fontWeight:500,cursor:"pointer",minWidth:150 }}>
               {options.map(o=><option key={o} value={o}>{o==="All"?`All ${label}s`:o}</option>)}
             </select>
           ))}
+          {/* Onboarder filter */}
+          <select value={filterOnboarder} onChange={e=>setFilterOnboarder(e.target.value)} style={{ padding:"8px 14px",border:"1.5px solid #e2e8f0",borderRadius:9,fontSize:13,color: filterOnboarder!=="All" ? ONBOARDER_CONFIG[filterOnboarder]?.color : "#374151",background: filterOnboarder!=="All" ? ONBOARDER_CONFIG[filterOnboarder]?.bg : "#f8fafc",outline:"none",fontFamily:"inherit",fontWeight: filterOnboarder!=="All" ? 700 : 500,cursor:"pointer",minWidth:150 }}>
+            <option value="All">All Onboarders</option>
+            {ONBOARDERS.map(o=><option key={o} value={o}>{o}</option>)}
+          </select>
           <div style={{ flex:1,minWidth:200,position:"relative" }}>
             <span style={{ position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#94a3b8",fontSize:16 }}>🔍</span>
             <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search trainee name..." style={{ width:"100%",padding:"8px 14px 8px 36px",border:"1.5px solid #e2e8f0",borderRadius:9,fontSize:13,color:"#374151",background:"#f8fafc",outline:"none",fontFamily:"inherit",boxSizing:"border-box" }}/>
@@ -1121,7 +1150,10 @@ export default function TraineePortal() {
                   </div>
                   <div>
                     <div style={{ fontWeight:600,fontSize:14,color:"#1e293b" }}>{trainee.name}</div>
-                    {overdue && <div style={{ fontSize:10,color:"#ef4444",fontWeight:600 }}>⚠ Overdue</div>}
+                    <div style={{ display:"flex",alignItems:"center",gap:4,marginTop:2 }}>
+                      {overdue && <span style={{ fontSize:10,color:"#ef4444",fontWeight:600 }}>⚠ Overdue</span>}
+                      {trainee.onboarder && <span style={{ fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:99,background: ONBOARDER_CONFIG[trainee.onboarder]?.bg||"#f1f5f9",color: ONBOARDER_CONFIG[trainee.onboarder]?.color||"#64748b" }}>👤 {trainee.onboarder}</span>}
+                    </div>
                   </div>
                 </div>
 
