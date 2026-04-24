@@ -1168,6 +1168,7 @@ function TraineePortal({ profile, onLogout }) {
   const [leavedModal,      setLeavedModal]      = useState(null); // { id, name } — trainee being moved to Leaved
   const [outcomeModal,     setOutcomeModal]     = useState(null); // { id, name } — trainee awaiting outcome decision
   const [showAdminPanel,   setShowAdminPanel]   = useState(false); // admin-only user management modal
+  const [showMobileMenu,   setShowMobileMenu]   = useState(false); // mobile drawer
   const [toast,            setToast]            = useState(null); // { type:"success"|"error", msg }
   const pendingSaves = useRef(new Set()); // IDs currently mid-save — blocks real-time bounce-back
   const DEFAULT_MESSAGES = {
@@ -1720,6 +1721,20 @@ function TraineePortal({ profile, onLogout }) {
             <div className="tf-navbar-subtitle" style={{ fontSize:11,color:"#94a3b8",marginTop:2 }}>Sales Training Portal</div>
           </div>
         </div>
+        {/* Mobile-only hamburger (hidden on desktop via CSS) */}
+        <button
+          className="tf-mobile-hamburger"
+          onClick={()=>setShowMobileMenu(true)}
+          aria-label="Open menu"
+          style={{ display:"none", background:"transparent", border:"none", cursor:"pointer", padding:8, borderRadius:10, color:"#1e293b" }}
+        >
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <line x1="4" y1="7" x2="20" y2="7"/>
+            <line x1="4" y1="12" x2="20" y2="12"/>
+            <line x1="4" y1="17" x2="20" y2="17"/>
+          </svg>
+        </button>
+
         <div className="tf-navbar-actions" style={{ display:"flex",gap:10,alignItems:"center" }}>
           {isAdmin && (
             <>
@@ -1776,6 +1791,22 @@ function TraineePortal({ profile, onLogout }) {
             </div>
             );
           })}
+        </div>
+
+        {/* Mobile-only filter pills (hidden on desktop via CSS) */}
+        <div className="tf-mobile-pills" style={{ display:"none" }}>
+          {[
+            { key:"All",          label:"All"          },
+            { key:"In Progress",  label:"Active"       },
+            { key:"Pending",      label:"Pending"      },
+            { key:"Selected",     label:"Selected"     },
+            { key:"Not Selected", label:"Not Selected" },
+            { key:"Leaved",       label:"Leaved"       },
+          ].map(p => (
+            <button key={p.key} className={filterStatus===p.key ? "active" : ""} onClick={()=>setFilterStatus(p.key)}>
+              {p.label}
+            </button>
+          ))}
         </div>
 
         {/* ── Filters ── */}
@@ -1956,7 +1987,7 @@ function TraineePortal({ profile, onLogout }) {
         </div>
 
         {/* Legend */}
-        <div style={{ marginTop:20,display:"flex",alignItems:"center",gap:24,padding:"12px 20px",background:"#fff",borderRadius:12,border:"1.5px solid #e8eaf6",flexWrap:"wrap" }}>
+        <div className="tf-legend" style={{ marginTop:20,display:"flex",alignItems:"center",gap:24,padding:"12px 20px",background:"#fff",borderRadius:12,border:"1.5px solid #e8eaf6",flexWrap:"wrap" }}>
           <span style={{ fontSize:12,fontWeight:700,color:"#64748b" }}>Status Legend:</span>
           {Object.entries(STATUS_CONFIG).map(([status,cfg])=>(
             <div key={status} style={{ display:"flex",alignItems:"center",gap:6 }}>
@@ -2467,6 +2498,54 @@ function TraineePortal({ profile, onLogout }) {
         </div>
       )}
       <style>{`@keyframes tfToastIn{from{transform:translateX(110%);opacity:0}to{transform:translateX(0);opacity:1}}`}</style>
+
+      {/* ── Mobile Drawer ── */}
+      {showMobileMenu && (
+        <>
+          <div className="tf-drawer-overlay" onClick={()=>setShowMobileMenu(false)} />
+          <div className="tf-drawer">
+            <div className="tf-drawer-header">
+              <div style={{ fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:16,color:"#1e293b" }}>
+                {profile?.name || profile?.email?.split("@")[0] || "User"}
+              </div>
+              {isAdmin
+                ? <div style={{ fontSize:11,fontWeight:700,color:"#6366f1",textTransform:"uppercase",letterSpacing:"0.05em",marginTop:3 }}>Admin</div>
+                : <div style={{ fontSize:11,color:"#94a3b8",marginTop:3 }}>{profile?.email}</div>}
+              <button className="tf-drawer-close" aria-label="Close" onClick={()=>setShowMobileMenu(false)}>×</button>
+            </div>
+
+            <button className="tf-drawer-item" onClick={()=>{ setShowAdd(true); setShowMobileMenu(false); }}>
+              <span className="tf-drawer-icon" style={{ background:"linear-gradient(135deg,#6366f1,#8b5cf6)", color:"#fff" }}>+</span>
+              <span>New Trainee</span>
+            </button>
+
+            <button className="tf-drawer-item" onClick={()=>{ setShowMessages(true); setShowMobileMenu(false); }}>
+              <span className="tf-drawer-icon" style={{ background:"linear-gradient(135deg,#0ea5e9,#06b6d4)", color:"#fff" }}>📨</span>
+              <span>Day Messages</span>
+            </button>
+
+            {isAdmin && (
+              <>
+                <button className="tf-drawer-item" onClick={()=>{ exportToExcel(); setShowMobileMenu(false); }}>
+                  <span className="tf-drawer-icon" style={{ background:"linear-gradient(135deg,#16a34a,#22c55e)", color:"#fff" }}>📊</span>
+                  <span>Export Excel</span>
+                </button>
+                <button className="tf-drawer-item" onClick={()=>{ setShowAdminPanel(true); setShowMobileMenu(false); }}>
+                  <span className="tf-drawer-icon" style={{ background:"#eef2ff", color:"#6366f1" }}>👥</span>
+                  <span>User Management</span>
+                </button>
+              </>
+            )}
+
+            <div style={{ marginTop:"auto" }}>
+              <button className="tf-drawer-item tf-drawer-danger" onClick={()=>{ setShowMobileMenu(false); onLogout(); }}>
+                <span className="tf-drawer-icon" style={{ background:"#fff1f2", color:"#ef4444" }}>↪</span>
+                <span>Logout</span>
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -2561,196 +2640,362 @@ export default function App() {
 }
 
 /* ══════════════════════════════ MOBILE STYLES ══════════════════════════════ */
-/* One global stylesheet with @media (max-width:768px) overrides. Desktop is untouched. */
+/* A single global stylesheet for the mobile UI polish. Desktop styles untouched. */
 function MobileStyles() {
   return (
     <style>{`
-      /* ── Base safety ── */
+      /* ═══════════════ DESKTOP: hide mobile-only elements ═══════════════ */
+      @media (min-width: 769px) {
+        .tf-mobile-hamburger,
+        .tf-mobile-pills,
+        .tf-drawer-overlay,
+        .tf-drawer { display: none !important; }
+      }
+
+      /* ═══════════════ MOBILE (≤768px) ═══════════════ */
       @media (max-width: 768px) {
         html, body, #root { overflow-x: hidden !important; }
         * { -webkit-tap-highlight-color: transparent; }
 
-        /* ── Navbar ── */
+        /* ─── NAVBAR ─── */
         .tf-navbar {
-          flex-wrap: wrap !important;
-          padding: 8px 10px !important;
-          height: auto !important;
-          gap: 8px !important;
+          padding: 10px 16px !important;
+          height: 60px !important;
+          gap: 10px !important;
+          border-bottom: 1px solid #eef2ff !important;
         }
         .tf-navbar-subtitle { display: none !important; }
-        .tf-navbar-actions {
-          width: 100% !important;
-          justify-content: space-between !important;
-          gap: 6px !important;
-          padding-left: 0 !important;
-          margin-left: 0 !important;
-          border-left: none !important;
-          flex-wrap: wrap !important;
+        .tf-navbar-actions { display: none !important; }
+        .tf-mobile-hamburger {
+          display: flex !important;
+          width: 44px !important;
+          height: 44px !important;
+          align-items: center;
+          justify-content: center;
+          background: #f1f5f9 !important;
+          border-radius: 12px;
+          transition: background 0.15s;
         }
-        .tf-navbar-actions > button,
-        .tf-navbar-actions > div {
-          padding: 8px 10px !important;
-          font-size: 12px !important;
-          min-height: 44px !important;
-        }
-        .tf-btn-label { display: none !important; }
-        .tf-user-role { display: none !important; }
-        .tf-user-block { gap: 6px !important; padding-left: 0 !important; margin-left: 0 !important; border-left: none !important; }
-        .tf-user-name { font-size: 11px !important; max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .tf-mobile-hamburger:active { background: #e2e8f0 !important; }
 
-        /* ── Stats ── */
+        /* ─── DRAWER ─── */
+        .tf-drawer-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(15, 23, 42, 0.45);
+          backdrop-filter: blur(2px);
+          z-index: 499;
+          animation: tfFadeIn 0.2s ease;
+        }
+        .tf-drawer {
+          position: fixed;
+          top: 0; right: 0; bottom: 0;
+          width: 300px;
+          max-width: 85vw;
+          background: #fff;
+          box-shadow: -12px 0 40px rgba(15, 23, 42, 0.18);
+          z-index: 500;
+          display: flex;
+          flex-direction: column;
+          padding: 20px 16px;
+          gap: 6px;
+          animation: tfDrawerIn 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .tf-drawer-header {
+          position: relative;
+          padding: 8px 8px 16px;
+          margin-bottom: 10px;
+          border-bottom: 1.5px solid #f1f5f9;
+        }
+        .tf-drawer-close {
+          position: absolute;
+          top: 0; right: 0;
+          width: 36px; height: 36px;
+          border: none;
+          background: #f1f5f9;
+          border-radius: 10px;
+          color: #64748b;
+          font-size: 20px;
+          cursor: pointer;
+        }
+        .tf-drawer-item {
+          display: flex !important;
+          align-items: center;
+          gap: 12px;
+          padding: 13px 12px !important;
+          border: none;
+          background: transparent;
+          border-radius: 12px;
+          font-family: inherit;
+          font-size: 15px !important;
+          font-weight: 600;
+          color: #1e293b;
+          text-align: left;
+          cursor: pointer;
+          min-height: 52px;
+          transition: background 0.15s;
+        }
+        .tf-drawer-item:active { background: #f1f5f9; }
+        .tf-drawer-icon {
+          width: 36px; height: 36px;
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 800;
+          font-size: 16px;
+          flex-shrink: 0;
+        }
+        .tf-drawer-danger { color: #ef4444 !important; }
+
+        @keyframes tfFadeIn  { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes tfDrawerIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+
+        /* ─── PAGE ─── */
+        .tf-page { padding: 14px !important; }
+
+        /* ─── STAT CARDS ─── */
         .tf-stat-grid {
           grid-template-columns: repeat(2, 1fr) !important;
           gap: 10px !important;
-          margin-bottom: 16px !important;
+          margin-bottom: 14px !important;
         }
         .tf-stat-grid > div {
-          padding: 14px 12px !important;
+          padding: 14px 14px !important;
+          border-radius: 16px !important;
+          box-shadow: 0 1px 3px rgba(15,23,42,0.04), 0 4px 14px rgba(15,23,42,0.04) !important;
+          position: relative;
+          overflow: hidden;
         }
-        .tf-stat-grid > div > div:nth-child(1) { font-size: 20px !important; }
-        .tf-stat-grid > div > div:nth-child(2) { font-size: 22px !important; }
-        .tf-stat-grid > div > div:nth-child(3) { font-size: 11px !important; }
+        /* Coloured left border accent */
+        .tf-stat-grid > div::before {
+          content: "";
+          position: absolute;
+          left: 0; top: 10%; bottom: 10%;
+          width: 4px;
+          border-radius: 4px;
+          background: currentColor;
+          opacity: 0.5;
+        }
+        .tf-stat-grid > div > div:nth-child(1) { font-size: 20px !important; margin-bottom: 4px !important; }
+        .tf-stat-grid > div > div:nth-child(2) { font-size: 26px !important; line-height: 1 !important; }
+        .tf-stat-grid > div > div:nth-child(3) { font-size: 11px !important; margin-top: 4px !important; }
 
-        /* ── Filter bar ── */
+        /* ─── FILTER BAR / PILLS ─── */
         .tf-filter-bar {
+          background: transparent !important;
+          border: none !important;
+          box-shadow: none !important;
+          padding: 0 !important;
+          margin-bottom: 14px !important;
           flex-direction: column !important;
           align-items: stretch !important;
-          padding: 12px !important;
+          gap: 10px !important;
         }
-        .tf-filter-bar > * {
+        .tf-filter-bar > select,
+        .tf-filter-summary { display: none !important; }
+        /* Search input becomes full-width pill */
+        .tf-filter-bar > div:has(> input) {
           width: 100% !important;
           min-width: 0 !important;
+          margin-left: 0 !important;
         }
-        .tf-filter-bar select, .tf-filter-bar input {
-          min-height: 44px !important;
+        .tf-filter-bar input {
+          min-height: 46px !important;
+          border-radius: 999px !important;
+          background: #fff !important;
+          border: 1.5px solid #e2e8f0 !important;
+          font-size: 14px !important;
+          padding-left: 40px !important;
+          box-shadow: 0 1px 3px rgba(15,23,42,0.04);
+        }
+        .tf-mobile-pills {
+          display: flex !important;
+          gap: 8px;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+          padding: 2px 0 4px;
+          margin: 0 -14px;
+          padding-left: 14px;
+          padding-right: 14px;
+        }
+        .tf-mobile-pills::-webkit-scrollbar { display: none; }
+        .tf-mobile-pills button {
+          flex: 0 0 auto;
+          padding: 10px 16px;
+          border-radius: 999px;
+          border: 1.5px solid #e2e8f0;
+          background: #fff;
+          color: #64748b;
+          font-weight: 600;
+          font-size: 13px;
+          cursor: pointer;
+          white-space: nowrap;
+          font-family: inherit;
+          transition: all 0.15s;
+          min-height: 38px;
+        }
+        .tf-mobile-pills button.active {
+          background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
+          color: #fff !important;
+          border-color: transparent !important;
+          box-shadow: 0 4px 12px rgba(99,102,241,0.28);
+        }
+
+        /* ─── BULK BAR ─── */
+        .tf-bulk-bar { flex-direction: column !important; gap: 10px !important; align-items: stretch !important; }
+
+        /* ─── TABLE → TRAINEE CARDS ─── */
+        .tf-table-container {
+          background: transparent !important;
+          border: none !important;
+          box-shadow: none !important;
+          overflow: visible !important;
+        }
+        .tf-trow-h,
+        .tf-bottom-row-header { display: none !important; }
+        .tf-trow, .tf-trow-bottom {
+          display: block !important;
+          background: #fff !important;
+          border-radius: 16px !important;
+          padding: 16px !important;
+          margin: 0 0 12px 0 !important;
+          box-shadow: 0 1px 3px rgba(15,23,42,0.05), 0 4px 12px rgba(15,23,42,0.04) !important;
+          border: none !important;
+          border-left: 4px solid #6366f1 !important;
+          position: relative;
+        }
+        .tf-trow[style*="rgb(239, 68, 68)"],
+        .tf-trow[style*="#ef4444"] { border-left-color: #ef4444 !important; background: #fffafa !important; }
+
+        /* Hide the row checkbox on mobile (bulk select via long-press not needed here) */
+        .tf-trow > div:nth-child(1) { display: none !important; }
+
+        /* Name row */
+        .tf-trow > div:nth-child(2),
+        .tf-trow-bottom > div:nth-child(1) {
+          display: flex !important;
+          align-items: center;
+          gap: 10px !important;
+          margin-bottom: 10px;
+        }
+        .tf-trow > div:nth-child(2) > div:first-child,
+        .tf-trow-bottom > div:nth-child(1) > div:first-child {
+          width: 42px !important;
+          height: 42px !important;
+          border-radius: 12px !important;
           font-size: 14px !important;
         }
-        .tf-filter-summary { font-size: 12px !important; margin-left: 0 !important; }
-
-        /* ── Page padding ── */
-        .tf-page { padding: 14px !important; }
-
-        /* ── Main trainee table → card cards on mobile ── */
-        .tf-trow-h { display: none !important; }
-        .tf-trow, .tf-trow-bottom {
-          grid-template-columns: auto 1fr !important;
-          row-gap: 8px !important;
-          column-gap: 10px !important;
-          padding: 14px !important;
-          border-radius: 12px !important;
-          margin: 8px !important;
-          background: #fff !important;
-          box-shadow: 0 2px 10px #0000080c !important;
-          border: 1.5px solid #e8eaf6 !important;
-          border-left-width: 4px !important;
+        .tf-trow > div:nth-child(2) > div:nth-child(2) > div:first-child,
+        .tf-trow-bottom > div:nth-child(1) > div:nth-child(2) > div:first-child {
+          font-size: 15px !important;
+          font-weight: 700 !important;
         }
-        /* Stack info cells; checkboxes go inside .tf-phases */
-        .tf-trow > *, .tf-trow-bottom > * { width: auto !important; }
-        .tf-trow > *:not(.tf-phases),
-        .tf-trow-bottom > *:not(.tf-phases) {
-          min-width: 0 !important;
-        }
-        /* First cell: small, right next to name */
-        .tf-trow > *:nth-child(1) { grid-column: 1; grid-row: 1; }
-        .tf-trow > *:nth-child(2) { grid-column: 2; grid-row: 1; }
-        .tf-trow > *:nth-child(3) { grid-column: 1 / -1; grid-row: 2; font-size: 13px !important; }
-        .tf-trow > *:nth-child(4) { grid-column: 1 / -1; grid-row: 3; justify-content: flex-start !important; }
-        .tf-trow > *:nth-child(5) { grid-column: 1 / -1; grid-row: 4; text-align: left !important; }
-        /* Bottom sections have no leading checkbox — start at col 1 */
-        .tf-trow-bottom > *:nth-child(1) { grid-column: 1 / -1; grid-row: 1; }
-        .tf-trow-bottom > *:nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
-        .tf-trow-bottom > *:nth-child(3) { grid-column: 1 / -1; grid-row: 3; justify-content: flex-start !important; text-align: left !important; }
-        .tf-trow-bottom > *:nth-child(4) { grid-column: 1 / -1; grid-row: 4; }
-        .tf-trow-bottom > *:nth-child(5) { grid-column: 1 / -1; grid-row: 5; text-align: left !important; }
 
-        /* The phase-cells wrapper → 6-column grid of bigger tap targets */
+        /* Contact row */
+        .tf-trow > div:nth-child(3),
+        .tf-trow-bottom > div:nth-child(2) {
+          font-size: 13px !important;
+          color: #64748b !important;
+          margin-bottom: 10px !important;
+          padding: 8px 10px;
+          background: #f8fafc;
+          border-radius: 10px;
+        }
+
+        /* Onboarder row: left align, label above */
+        .tf-trow > div:nth-child(4),
+        .tf-trow-bottom > div:nth-child(3) {
+          justify-content: flex-start !important;
+          margin-bottom: 10px !important;
+        }
+        /* Phase badge row */
+        .tf-trow > div:nth-child(5),
+        .tf-trow-bottom > div:nth-child(4) {
+          text-align: left !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: space-between !important;
+          margin-bottom: 10px !important;
+        }
+
+        /* 11-cell compact phase strip — tight grid */
         .tf-phases {
           display: grid !important;
-          grid-template-columns: repeat(6, 1fr) !important;
-          gap: 10px !important;
-          grid-column: 1 / -1 !important;
-          padding-top: 10px !important;
-          border-top: 1px solid #f1f5f9 !important;
+          grid-template-columns: repeat(11, 1fr) !important;
+          gap: 3px !important;
+          padding-top: 12px !important;
           margin-top: 4px !important;
+          border-top: 1px dashed #e2e8f0 !important;
         }
         .tf-phases > div {
-          min-height: 40px !important;
+          min-height: 30px !important;
+          min-width: 0 !important;
           display: flex !important;
           align-items: center !important;
           justify-content: center !important;
-          flex-direction: column;
-          gap: 3px;
-          font-size: 9px;
+          padding: 0 !important;
         }
-        .tf-phases > div::after {
-          display: none; /* could show phase name label if desired */
+        /* Shrink the checkbox squares themselves for this compact strip */
+        .tf-phases label span {
+          width: 22px !important;
+          height: 22px !important;
         }
-
-        /* Main table container: remove inner padding */
-        .tf-table-container {
-          border-radius: 14px !important;
-          border: none !important;
-          box-shadow: none !important;
-          background: transparent !important;
-          overflow: visible !important;
+        .tf-phases label span svg {
+          width: 11px !important;
+          height: 9px !important;
         }
 
-        /* Bulk bar */
-        .tf-bulk-bar {
-          flex-direction: column !important;
-          align-items: stretch !important;
-          gap: 10px !important;
-        }
-
-        /* ── Bottom section row column templates override ── */
-        .tf-bottom-row-header { display: none !important; }
-
-        /* ── Modals: near-full screen ── */
-        .tf-modal-root { padding: 0 !important; }
+        /* ─── MODALS: bottom-sheet slide up ─── */
+        .tf-modal-root { padding: 0 !important; align-items: flex-end !important; }
         .tf-modal-card {
           width: 100vw !important;
           max-width: 100vw !important;
-          height: 100vh !important;
-          max-height: 100vh !important;
-          border-radius: 0 !important;
+          height: 96vh !important;
+          max-height: 96vh !important;
+          border-radius: 20px 20px 0 0 !important;
+          animation: tfSheetUp 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
         }
-        .tf-modal-card > * { box-sizing: border-box; }
+        @keyframes tfSheetUp {
+          from { transform: translateY(100%); }
+          to   { transform: translateY(0); }
+        }
 
-        /* Trainee notes modal header ellipsis */
-        .tf-notes-modal .tf-modal-card { padding: 0; }
+        /* Modal content tap targets */
+        .tf-modal-card select,
+        .tf-modal-card button {
+          min-height: 44px;
+        }
+        .tf-modal-card textarea { min-height: 110px; font-size: 14px; }
 
-        /* Day messages tabs — allow scroll on mobile, stays in one line */
+        /* Day messages tabs — horizontal scroll with no scrollbar */
         .tf-day-tabs {
           overflow-x: auto !important;
-          padding: 0 !important;
+          padding: 0 8px !important;
         }
         .tf-day-tabs::-webkit-scrollbar { display: none; }
         .tf-day-tabs button {
           flex: 0 0 auto !important;
-          padding: 12px 10px !important;
-          font-size: 12px !important;
-          min-width: 70px !important;
+          padding: 13px 14px !important;
+          font-size: 13px !important;
+          min-width: auto !important;
+          min-height: 44px !important;
         }
 
-        /* Login form: full width with safe padding */
+        /* ─── LEGEND: hide entirely on mobile ─── */
+        .tf-legend { display: none !important; }
+
+        /* ─── BOTTOM SECTION HEADERS (accordion cards) ─── */
+        /* The existing section headers already look decent, just tighten */
+
+        /* ─── LOGIN ─── */
         .tf-login-form {
           width: calc(100vw - 24px) !important;
-          max-width: 440px !important;
-          padding: 28px 22px !important;
+          max-width: 460px !important;
+          padding: 30px 24px !important;
         }
 
-        /* Legend — wrap */
-        .tf-legend {
-          flex-direction: column !important;
-          align-items: flex-start !important;
-          gap: 8px !important;
-        }
-
-        /* Larger tap targets for checkboxes and dropdowns */
-        select, input[type="checkbox"], button {
-          min-height: 40px;
-        }
-        .tf-phases select, .tf-phases button { min-height: auto; }
+        /* ─── Toast: slightly higher on mobile so it's not under keyboard ─── */
       }
     `}</style>
   );
