@@ -149,8 +149,8 @@ function TraineeNotesModal({ trainee, onClose, onUpdate, onDelete }) {
       position:"fixed", inset:0, background:"#00000088", zIndex:300,
       display:"flex", alignItems:"center", justifyContent:"center",
       padding: "16px",
-    }} onClick={onClose}>
-      <div style={{
+    }} className="tf-modal-root tf-notes-modal" onClick={onClose}>
+      <div className="tf-modal-card" style={{
         background:"#fff", borderRadius:20, width:820, maxWidth:"97vw",
         maxHeight:"90vh", display:"flex", flexDirection:"column",
         boxShadow:"0 32px 80px #0004",
@@ -543,8 +543,8 @@ function DayMessagesPanel({ dayMessages, setDayMessages, onSave, onReset, onClos
   const handleCopy = () => { navigator.clipboard.writeText(currentMsg).then(()=>{ setCopied(true); setTimeout(()=>setCopied(false),2000); }); };
 
   return (
-    <div style={{ position:"fixed",inset:0,background:"#0009",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }} onClick={onClose}>
-      <div style={{ width:700,maxWidth:"96vw",height:"85vh",maxHeight:"85vh",background:"#fff",borderRadius:20,boxShadow:"0 32px 80px #0004",display:"flex",flexDirection:"column",fontFamily:"'DM Sans',sans-serif",overflow:"hidden" }} onClick={e=>e.stopPropagation()}>
+    <div className="tf-modal-root" style={{ position:"fixed",inset:0,background:"#0009",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }} onClick={onClose}>
+      <div className="tf-modal-card tf-day-modal" style={{ width:700,maxWidth:"96vw",height:"85vh",maxHeight:"85vh",background:"#fff",borderRadius:20,boxShadow:"0 32px 80px #0004",display:"flex",flexDirection:"column",fontFamily:"'DM Sans',sans-serif",overflow:"hidden" }} onClick={e=>e.stopPropagation()}>
 
         {/* Header */}
         <div style={{ padding:"20px 24px",borderBottom:"2px solid #e0e7ff",background:"linear-gradient(135deg,#eef2ff,#ede9fe)",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0 }}>
@@ -556,7 +556,7 @@ function DayMessagesPanel({ dayMessages, setDayMessages, onSave, onReset, onClos
         </div>
 
         {/* Day Tabs — single row, all fit without scrolling */}
-        <div style={{ display:"flex",gap:0,overflow:"hidden",borderBottom:"2px solid #e8eaf6",background:"#fafbff",padding:"0 8px",flexShrink:0 }}>
+        <div className="tf-day-tabs" style={{ display:"flex",gap:0,overflow:"hidden",borderBottom:"2px solid #e8eaf6",background:"#fafbff",padding:"0 8px",flexShrink:0 }}>
           {["intro","faq",1,2,"certificate",3,4,5,7,8].map(d => {
             const tabNames = { intro:"Intro", faq:"FAQ", 1:"Videos", 2:"Interview", certificate:"Certificate", 3:"Chat P1", 4:"Chat P2", 5:"Theme", 7:"Portfolio", 8:"Final Test" };
             return (
@@ -950,7 +950,7 @@ function LoginPage({ onLogin, error, busy }) {
   return (
     <div style={{ minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(160deg,#f8faff 0%,#f0f4ff 50%,#faf5ff 100%)",fontFamily:"'DM Sans','Segoe UI',sans-serif",padding:20 }}>
       <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
-      <form onSubmit={submit} style={{ background:"#fff",borderRadius:24,padding:44,width:440,maxWidth:"95vw",boxShadow:"0 28px 80px #6366f122",border:"1.5px solid #e0e7ff" }}>
+      <form onSubmit={submit} className="tf-login-form" style={{ background:"#fff",borderRadius:24,padding:44,width:440,maxWidth:"95vw",boxShadow:"0 28px 80px #6366f122",border:"1.5px solid #e0e7ff" }}>
         <div style={{ textAlign:"center",marginBottom:28 }}>
           <div style={{ width:60,height:60,margin:"0 auto 14px",borderRadius:16,background:"linear-gradient(135deg,#6366f1,#8b5cf6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,boxShadow:"0 8px 24px #6366f144" }}>🎓</div>
           <h1 style={{ margin:0,fontSize:26,fontWeight:800,color:"#1e293b",fontFamily:"'Sora',sans-serif" }}>TrainFlow <span style={{ color:"#6366f1" }}>Pro</span></h1>
@@ -1067,8 +1067,8 @@ function AdminPanel({ currentUserId, onClose, showToast }) {
   };
 
   return (
-    <div style={{ position:"fixed",inset:0,background:"#0009",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }} onClick={onClose}>
-      <div style={{ width:780,maxWidth:"97vw",maxHeight:"90vh",background:"#fff",borderRadius:20,boxShadow:"0 32px 80px #0004",display:"flex",flexDirection:"column",fontFamily:"'DM Sans',sans-serif",overflow:"hidden" }} onClick={e=>e.stopPropagation()}>
+    <div className="tf-modal-root" style={{ position:"fixed",inset:0,background:"#0009",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }} onClick={onClose}>
+      <div className="tf-modal-card" style={{ width:780,maxWidth:"97vw",maxHeight:"90vh",background:"#fff",borderRadius:20,boxShadow:"0 32px 80px #0004",display:"flex",flexDirection:"column",fontFamily:"'DM Sans',sans-serif",overflow:"hidden" }} onClick={e=>e.stopPropagation()}>
         <div style={{ padding:"20px 26px",borderBottom:"2px solid #e0e7ff",background:"linear-gradient(135deg,#eef2ff,#ede9fe)",display:"flex",alignItems:"center",justifyContent:"space-between" }}>
           <div>
             <div style={{ fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:19,color:"#1e293b" }}>👥 User Management</div>
@@ -1712,45 +1712,45 @@ function TraineePortal({ profile, onLogout }) {
       <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
 
       {/* ── Header ── */}
-      <div style={{ background:"#fff",borderBottom:"1px solid #e8eaf6",padding:"0 32px",display:"flex",alignItems:"center",justifyContent:"space-between",height:64,boxShadow:"0 2px 12px #6366f10a",position:"sticky",top:0,zIndex:100 }}>
+      <div className="tf-navbar" style={{ background:"#fff",borderBottom:"1px solid #e8eaf6",padding:"0 32px",display:"flex",alignItems:"center",justifyContent:"space-between",height:64,boxShadow:"0 2px 12px #6366f10a",position:"sticky",top:0,zIndex:100 }}>
         <div style={{ display:"flex",alignItems:"center",gap:12 }}>
           <div style={{ width:38,height:38,borderRadius:10,background:"linear-gradient(135deg,#6366f1,#8b5cf6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,boxShadow:"0 4px 14px #6366f133" }}>🎓</div>
           <div>
             <div style={{ fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:18,color:"#1e293b",lineHeight:1 }}>TrainFlow <span style={{ color:"#6366f1" }}>Pro</span></div>
-            <div style={{ fontSize:11,color:"#94a3b8",marginTop:2 }}>Sales Training Portal</div>
+            <div className="tf-navbar-subtitle" style={{ fontSize:11,color:"#94a3b8",marginTop:2 }}>Sales Training Portal</div>
           </div>
         </div>
-        <div style={{ display:"flex",gap:10,alignItems:"center" }}>
+        <div className="tf-navbar-actions" style={{ display:"flex",gap:10,alignItems:"center" }}>
           {isAdmin && (
             <>
               <button onClick={exportToExcel} title="Export all trainees to Excel (Admin only)" style={{ display:"flex",alignItems:"center",gap:6,background:"linear-gradient(135deg,#16a34a,#22c55e)",color:"#fff",border:"none",borderRadius:10,padding:"9px 16px",fontWeight:700,fontSize:13,cursor:"pointer",boxShadow:"0 4px 14px #16a34a33",fontFamily:"inherit" }}>
-                📊 Export Excel
+                📊<span className="tf-btn-label"> Export Excel</span>
               </button>
               <button onClick={()=>setShowAdminPanel(true)} title="User Management (Admin only)" style={{ display:"flex",alignItems:"center",gap:6,background:"#fff",color:"#6366f1",border:"1.5px solid #c7d2fe",borderRadius:10,padding:"9px 16px",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit" }}>
-                👥 Users
+                👥<span className="tf-btn-label"> Users</span>
               </button>
             </>
           )}
-          <button onClick={()=>setShowMessages(true)} style={{ display:"flex",alignItems:"center",gap:8,background:"linear-gradient(135deg,#0ea5e9,#06b6d4)",color:"#fff",border:"none",borderRadius:10,padding:"9px 20px",fontWeight:700,fontSize:14,cursor:"pointer",boxShadow:"0 4px 16px #0ea5e933",fontFamily:"inherit" }}>📨 Day Messages</button>
-          <button onClick={()=>setShowAdd(true)} style={{ display:"flex",alignItems:"center",gap:8,background:"linear-gradient(135deg,#6366f1,#8b5cf6)",color:"#fff",border:"none",borderRadius:10,padding:"9px 20px",fontWeight:700,fontSize:14,cursor:"pointer",boxShadow:"0 4px 16px #6366f133",fontFamily:"inherit" }}><span style={{ fontSize:18,lineHeight:1 }}>+</span> New Trainee</button>
+          <button onClick={()=>setShowMessages(true)} title="Day Messages" style={{ display:"flex",alignItems:"center",gap:8,background:"linear-gradient(135deg,#0ea5e9,#06b6d4)",color:"#fff",border:"none",borderRadius:10,padding:"9px 20px",fontWeight:700,fontSize:14,cursor:"pointer",boxShadow:"0 4px 16px #0ea5e933",fontFamily:"inherit" }}>📨<span className="tf-btn-label"> Day Messages</span></button>
+          <button onClick={()=>setShowAdd(true)} title="New Trainee" style={{ display:"flex",alignItems:"center",gap:8,background:"linear-gradient(135deg,#6366f1,#8b5cf6)",color:"#fff",border:"none",borderRadius:10,padding:"9px 20px",fontWeight:700,fontSize:14,cursor:"pointer",boxShadow:"0 4px 16px #6366f133",fontFamily:"inherit" }}><span style={{ fontSize:18,lineHeight:1 }}>+</span><span className="tf-btn-label"> New Trainee</span></button>
           {/* User badge + Logout */}
-          <div style={{ display:"flex",alignItems:"center",gap:8,paddingLeft:10,marginLeft:4,borderLeft:"1.5px solid #e8eaf6" }}>
+          <div className="tf-user-block" style={{ display:"flex",alignItems:"center",gap:8,paddingLeft:10,marginLeft:4,borderLeft:"1.5px solid #e8eaf6" }}>
             <div style={{ textAlign:"right",lineHeight:1.2 }}>
-              <div style={{ fontSize:12,fontWeight:700,color:"#1e293b" }}>{profile?.name || profile?.email?.split("@")[0] || "User"}</div>
+              <div className="tf-user-name" style={{ fontSize:12,fontWeight:700,color:"#1e293b" }}>{profile?.name || profile?.email?.split("@")[0] || "User"}</div>
               {isAdmin && (
-                <div style={{ fontSize:10,fontWeight:700,color:"#6366f1",textTransform:"uppercase",letterSpacing:"0.05em" }}>Admin</div>
+                <div className="tf-user-role" style={{ fontSize:10,fontWeight:700,color:"#6366f1",textTransform:"uppercase",letterSpacing:"0.05em" }}>Admin</div>
               )}
             </div>
             <button onClick={onLogout} title="Log out" style={{ background:"#fff",color:"#ef4444",border:"1.5px solid #fecaca",borderRadius:10,padding:"8px 12px",fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit" }}>
-              ↪ Logout
+              ↪<span className="tf-btn-label"> Logout</span>
             </button>
           </div>
         </div>
       </div>
 
-      <div style={{ padding:"28px 32px" }}>
+      <div className="tf-page" style={{ padding:"28px 32px" }}>
         {/* ── Stats ── */}
-        <div style={{ display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:14,marginBottom:28 }}>
+        <div className="tf-stat-grid" style={{ display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:14,marginBottom:28 }}>
           {STAT_CARDS.map(card=>{
             const isActive = card.key === "total" ? filterStatus === "All" : filterStatus === card.key;
             return (
@@ -1779,7 +1779,7 @@ function TraineePortal({ profile, onLogout }) {
         </div>
 
         {/* ── Filters ── */}
-        <div style={{ background:"#fff",borderRadius:16,padding:"16px 20px",border:"1.5px solid #e8eaf6",marginBottom:20,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap",boxShadow:"0 2px 12px #0000060a" }}>
+        <div className="tf-filter-bar" style={{ background:"#fff",borderRadius:16,padding:"16px 20px",border:"1.5px solid #e8eaf6",marginBottom:20,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap",boxShadow:"0 2px 12px #0000060a" }}>
           {[{label:"Trainee",value:filterName,set:setFilterName,options:uniqueNames},{label:"Status",value:filterStatus,set:setFilterStatus,options:["All",...STATUSES]}].map(({label,value,set,options})=>(
             <select key={label} value={value} onChange={e=>set(e.target.value)} style={{ padding:"8px 14px",border:"1.5px solid #e2e8f0",borderRadius:9,fontSize:13,color:"#374151",background:"#f8fafc",outline:"none",fontFamily:"inherit",fontWeight:500,cursor:"pointer",minWidth:150 }}>
               {options.map(o=><option key={o} value={o}>{o==="All"?`All ${label}s`:o}</option>)}
@@ -1796,7 +1796,7 @@ function TraineePortal({ profile, onLogout }) {
             <span style={{ position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#94a3b8",fontSize:16 }}>🔍</span>
             <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search trainee name..." style={{ width:"100%",padding:"8px 14px 8px 36px",border:"1.5px solid #e2e8f0",borderRadius:9,fontSize:13,color:"#374151",background:"#f8fafc",outline:"none",fontFamily:"inherit",boxSizing:"border-box" }}/>
           </div>
-          <div style={{ fontSize:13,color:"#94a3b8",fontWeight:500,marginLeft:"auto" }}>
+          <div className="tf-filter-summary" style={{ fontSize:13,color:"#94a3b8",fontWeight:500,marginLeft:"auto" }}>
             Showing <strong style={{ color:"#6366f1" }}>{activeTrainees.length}</strong> active{pendingTrainees.length > 0 ? `, ${pendingTrainees.length} pending` : ""}{selectedTrainees.length > 0 ? `, ${selectedTrainees.length} selected` : ""}{notSelectedTrainees.length > 0 ? `, ${notSelectedTrainees.length} not selected` : ""}{leavedTrainees.length > 0 ? `, ${leavedTrainees.length} leaved` : ""} of {trainees.length} trainees
           </div>
         </div>
@@ -1835,9 +1835,9 @@ function TraineePortal({ profile, onLogout }) {
         )}
 
         {/* ── Table ── */}
-        <div style={{ background:"#fff",borderRadius:18,border:"1.5px solid #e8eaf6",overflow:"hidden",boxShadow:"0 4px 24px #0000080a" }}>
+        <div className="tf-table-container" style={{ background:"#fff",borderRadius:18,border:"1.5px solid #e8eaf6",overflow:"hidden",boxShadow:"0 4px 24px #0000080a" }}>
           {/* Header */}
-          <div style={{ display:"grid",gridTemplateColumns:"40px 2fr 1.6fr 100px 90px repeat(11,64px)",padding:"12px 20px",background:"linear-gradient(135deg,#f8faff,#f0f4ff)",borderBottom:"2px solid #e8eaf6",gap:8,alignItems:"center" }}>
+          <div className="tf-trow-h" style={{ display:"grid",gridTemplateColumns:"40px 2fr 1.6fr 100px 90px repeat(11,64px)",padding:"12px 20px",background:"linear-gradient(135deg,#f8faff,#f0f4ff)",borderBottom:"2px solid #e8eaf6",gap:8,alignItems:"center" }}>
             <div style={{ display:"flex",alignItems:"center",justifyContent:"center" }}>
               <input type="checkbox"
                 checked={activeTrainees.length>0 && activeTrainees.every(t=>selectedRows.has(t.id))}
@@ -1866,7 +1866,7 @@ function TraineePortal({ profile, onLogout }) {
             const rowBg         = overdue ? "#fff9f9" : idx%2===0 ? "#fff" : "#fafbff";
 
             return (
-              <div key={trainee.id} style={{
+              <div key={trainee.id} className="tf-trow" style={{
                 display:"grid", gridTemplateColumns:"40px 2fr 1.6fr 100px 90px repeat(11,64px)",
                 padding:"13px 20px", gap:8, alignItems:"center",
                 background:rowBg,
@@ -1938,16 +1938,18 @@ function TraineePortal({ profile, onLogout }) {
                   <div style={{ fontSize:10,color:"#94a3b8",marginTop:2 }}>{completedCount}/{PHASES.length}</div>
                 </div>
 
-                {/* Phase Checkboxes */}
-                {PHASES.map(p => (
-                  <div key={p.key} style={{ display:"flex",justifyContent:"center" }} onClick={e=>e.stopPropagation()}>
-                    <PhaseCheckbox
-                      checked={trainee.phases[p.key]}
-                      onChange={e=>updatePhase(trainee.id,p.key,e.target.checked)}
-                      overdue={overdue && !trainee.phases[p.key]}
-                    />
-                  </div>
-                ))}
+                {/* Phase Checkboxes — wrapper has display:contents so desktop grid is unchanged; mobile CSS swaps to flex/grid */}
+                <div className="tf-phases" style={{ display:"contents" }}>
+                  {PHASES.map(p => (
+                    <div key={p.key} style={{ display:"flex",justifyContent:"center" }} onClick={e=>e.stopPropagation()}>
+                      <PhaseCheckbox
+                        checked={trainee.phases[p.key]}
+                        onChange={e=>updatePhase(trainee.id,p.key,e.target.checked)}
+                        overdue={overdue && !trainee.phases[p.key]}
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
             );
           })}
@@ -2003,7 +2005,7 @@ function TraineePortal({ profile, onLogout }) {
 
             {showPending && (
               <div style={{ background:"#fff", borderRadius:"0 0 18px 18px", border:"1.5px solid #fde047", borderTop:"none", overflow:"hidden", boxShadow:"0 4px 24px #0000080a" }}>
-                <div style={{ display:"grid",gridTemplateColumns:"2fr 1.4fr 130px 90px repeat(11,64px)",padding:"12px 20px",background:"linear-gradient(135deg,#fefce8,#fef9c3)",borderBottom:"2px solid #fde047",gap:8,alignItems:"center" }}>
+                <div className="tf-bottom-row-header" style={{ display:"grid",gridTemplateColumns:"2fr 1.4fr 130px 90px repeat(11,64px)",padding:"12px 20px",background:"linear-gradient(135deg,#fefce8,#fef9c3)",borderBottom:"2px solid #fde047",gap:8,alignItems:"center" }}>
                   <div style={thStyle}>Trainee Name</div>
                   <div style={thStyle}>Contact</div>
                   <div style={{ ...thStyle, textAlign:"center" }}>Decide Now</div>
@@ -2013,7 +2015,7 @@ function TraineePortal({ profile, onLogout }) {
                 {pendingTrainees.map((trainee,idx) => {
                   const completedCount = getCompletedCount(trainee.phases);
                   return (
-                    <div key={trainee.id} style={{
+                    <div key={trainee.id} className="tf-trow-bottom" style={{
                       display:"grid", gridTemplateColumns:"2fr 1.4fr 130px 90px repeat(11,64px)",
                       padding:"13px 20px", gap:8, alignItems:"center",
                       background: idx%2===0 ? "#fff" : "#fefce8",
@@ -2053,11 +2055,13 @@ function TraineePortal({ profile, onLogout }) {
                         <div style={{ display:"inline-block",background:"linear-gradient(135deg,#fefce8,#fde047)",color:"#ca8a04",fontWeight:700,fontSize:12,borderRadius:7,padding:"3px 8px" }}>Done ✓</div>
                         <div style={{ fontSize:10,color:"#94a3b8",marginTop:2 }}>{completedCount}/{PHASES.length}</div>
                       </div>
-                      {PHASES.map(p => (
-                        <div key={p.key} style={{ display:"flex",justifyContent:"center" }} onClick={e=>e.stopPropagation()}>
-                          <PhaseCheckbox checked={trainee.phases[p.key]} onChange={e=>updatePhase(trainee.id,p.key,e.target.checked)} overdue={false} />
-                        </div>
-                      ))}
+                      <div className="tf-phases" style={{ display:"contents" }}>
+                        {PHASES.map(p => (
+                          <div key={p.key} style={{ display:"flex",justifyContent:"center" }} onClick={e=>e.stopPropagation()}>
+                            <PhaseCheckbox checked={trainee.phases[p.key]} onChange={e=>updatePhase(trainee.id,p.key,e.target.checked)} overdue={false} />
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   );
                 })}
@@ -2100,7 +2104,7 @@ function TraineePortal({ profile, onLogout }) {
 
             {showSelected && (
               <div style={{ background:"#fff", borderRadius:"0 0 18px 18px", border:"1.5px solid #99f6e4", borderTop:"none", overflow:"hidden", boxShadow:"0 4px 24px #0000080a" }}>
-                <div style={{ display:"grid",gridTemplateColumns:"2fr 1.4fr 130px 90px repeat(11,64px)",padding:"12px 20px",background:"linear-gradient(135deg,#f0fdfa,#ecfdf5)",borderBottom:"2px solid #d1fae5",gap:8,alignItems:"center" }}>
+                <div className="tf-bottom-row-header" style={{ display:"grid",gridTemplateColumns:"2fr 1.4fr 130px 90px repeat(11,64px)",padding:"12px 20px",background:"linear-gradient(135deg,#f0fdfa,#ecfdf5)",borderBottom:"2px solid #d1fae5",gap:8,alignItems:"center" }}>
                   <div style={thStyle}>Trainee Name</div>
                   <div style={thStyle}>Contact</div>
                   <div style={{ ...thStyle, textAlign:"center" }}>Change Status</div>
@@ -2110,7 +2114,7 @@ function TraineePortal({ profile, onLogout }) {
                 {selectedTrainees.map((trainee,idx) => {
                   const completedCount = getCompletedCount(trainee.phases);
                   return (
-                    <div key={trainee.id} style={{
+                    <div key={trainee.id} className="tf-trow-bottom" style={{
                       display:"grid", gridTemplateColumns:"2fr 1.4fr 130px 90px repeat(11,64px)",
                       padding:"13px 20px", gap:8, alignItems:"center",
                       background: idx%2===0 ? "#fff" : "#f0fdfa",
@@ -2147,11 +2151,13 @@ function TraineePortal({ profile, onLogout }) {
                         <div style={{ display:"inline-block",background:"linear-gradient(135deg,#ecfdf5,#d1fae5)",color:"#0d9488",fontWeight:700,fontSize:12,borderRadius:7,padding:"3px 8px" }}>Done ✓</div>
                         <div style={{ fontSize:10,color:"#94a3b8",marginTop:2 }}>{completedCount}/{PHASES.length}</div>
                       </div>
-                      {PHASES.map(p => (
-                        <div key={p.key} style={{ display:"flex",justifyContent:"center" }} onClick={e=>e.stopPropagation()}>
-                          <PhaseCheckbox checked={trainee.phases[p.key]} onChange={e=>updatePhase(trainee.id,p.key,e.target.checked)} overdue={false} />
-                        </div>
-                      ))}
+                      <div className="tf-phases" style={{ display:"contents" }}>
+                        {PHASES.map(p => (
+                          <div key={p.key} style={{ display:"flex",justifyContent:"center" }} onClick={e=>e.stopPropagation()}>
+                            <PhaseCheckbox checked={trainee.phases[p.key]} onChange={e=>updatePhase(trainee.id,p.key,e.target.checked)} overdue={false} />
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   );
                 })}
@@ -2194,7 +2200,7 @@ function TraineePortal({ profile, onLogout }) {
 
             {showNotSelected && (
               <div style={{ background:"#fff", borderRadius:"0 0 18px 18px", border:"1.5px solid #fcd34d", borderTop:"none", overflow:"hidden", boxShadow:"0 4px 24px #0000080a" }}>
-                <div style={{ display:"grid",gridTemplateColumns:"2fr 1.4fr 130px 90px repeat(11,64px)",padding:"12px 20px",background:"linear-gradient(135deg,#fffbeb,#fef3c7)",borderBottom:"2px solid #fde68a",gap:8,alignItems:"center" }}>
+                <div className="tf-bottom-row-header" style={{ display:"grid",gridTemplateColumns:"2fr 1.4fr 130px 90px repeat(11,64px)",padding:"12px 20px",background:"linear-gradient(135deg,#fffbeb,#fef3c7)",borderBottom:"2px solid #fde68a",gap:8,alignItems:"center" }}>
                   <div style={thStyle}>Trainee Name</div>
                   <div style={thStyle}>Contact</div>
                   <div style={{ ...thStyle, textAlign:"center" }}>Change Status</div>
@@ -2204,7 +2210,7 @@ function TraineePortal({ profile, onLogout }) {
                 {notSelectedTrainees.map((trainee,idx) => {
                   const completedCount = getCompletedCount(trainee.phases);
                   return (
-                    <div key={trainee.id} style={{
+                    <div key={trainee.id} className="tf-trow-bottom" style={{
                       display:"grid", gridTemplateColumns:"2fr 1.4fr 130px 90px repeat(11,64px)",
                       padding:"13px 20px", gap:8, alignItems:"center",
                       background: idx%2===0 ? "#fff" : "#fffbeb",
@@ -2241,11 +2247,13 @@ function TraineePortal({ profile, onLogout }) {
                         <div style={{ display:"inline-block",background:"linear-gradient(135deg,#fffbeb,#fde68a)",color:"#d97706",fontWeight:700,fontSize:12,borderRadius:7,padding:"3px 8px" }}>Done ✓</div>
                         <div style={{ fontSize:10,color:"#94a3b8",marginTop:2 }}>{completedCount}/{PHASES.length}</div>
                       </div>
-                      {PHASES.map(p => (
-                        <div key={p.key} style={{ display:"flex",justifyContent:"center" }} onClick={e=>e.stopPropagation()}>
-                          <PhaseCheckbox checked={trainee.phases[p.key]} onChange={e=>updatePhase(trainee.id,p.key,e.target.checked)} overdue={false} />
-                        </div>
-                      ))}
+                      <div className="tf-phases" style={{ display:"contents" }}>
+                        {PHASES.map(p => (
+                          <div key={p.key} style={{ display:"flex",justifyContent:"center" }} onClick={e=>e.stopPropagation()}>
+                            <PhaseCheckbox checked={trainee.phases[p.key]} onChange={e=>updatePhase(trainee.id,p.key,e.target.checked)} overdue={false} />
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   );
                 })}
@@ -2288,7 +2296,7 @@ function TraineePortal({ profile, onLogout }) {
 
             {showLeaved && (
               <div style={{ background:"#fff", borderRadius:"0 0 18px 18px", border:"1.5px solid #fecdd3", borderTop:"none", overflow:"hidden", boxShadow:"0 4px 24px #0000080a" }}>
-                <div style={{ display:"grid",gridTemplateColumns:"2fr 1.4fr 1.5fr 130px 90px repeat(11,64px)",padding:"12px 20px",background:"linear-gradient(135deg,#fff1f2,#ffe4e6)",borderBottom:"2px solid #fecdd3",gap:8,alignItems:"center" }}>
+                <div className="tf-bottom-row-header" style={{ display:"grid",gridTemplateColumns:"2fr 1.4fr 1.5fr 130px 90px repeat(11,64px)",padding:"12px 20px",background:"linear-gradient(135deg,#fff1f2,#ffe4e6)",borderBottom:"2px solid #fecdd3",gap:8,alignItems:"center" }}>
                   <div style={thStyle}>Trainee Name</div>
                   <div style={thStyle}>Contact</div>
                   <div style={thStyle}>Reason</div>
@@ -2300,7 +2308,7 @@ function TraineePortal({ profile, onLogout }) {
                   const completedCount = getCompletedCount(trainee.phases);
                   const currentDay = getPhaseDay(trainee.phases);
                   return (
-                    <div key={trainee.id} style={{
+                    <div key={trainee.id} className="tf-trow-bottom" style={{
                       display:"grid", gridTemplateColumns:"2fr 1.4fr 1.5fr 130px 90px repeat(11,64px)",
                       padding:"13px 20px", gap:8, alignItems:"center",
                       background: idx%2===0 ? "#fff" : "#fff1f2",
@@ -2347,11 +2355,13 @@ function TraineePortal({ profile, onLogout }) {
                         </div>
                         <div style={{ fontSize:10,color:"#94a3b8",marginTop:2 }}>{completedCount}/{PHASES.length}</div>
                       </div>
-                      {PHASES.map(p => (
-                        <div key={p.key} style={{ display:"flex",justifyContent:"center" }} onClick={e=>e.stopPropagation()}>
-                          <PhaseCheckbox checked={trainee.phases[p.key]} onChange={e=>updatePhase(trainee.id,p.key,e.target.checked)} overdue={false} />
-                        </div>
-                      ))}
+                      <div className="tf-phases" style={{ display:"contents" }}>
+                        {PHASES.map(p => (
+                          <div key={p.key} style={{ display:"flex",justifyContent:"center" }} onClick={e=>e.stopPropagation()}>
+                            <PhaseCheckbox checked={trainee.phases[p.key]} onChange={e=>updatePhase(trainee.id,p.key,e.target.checked)} overdue={false} />
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   );
                 })}
@@ -2543,9 +2553,205 @@ export default function App() {
     </div>
   );
 
-  if (!session)               return <LoginPage onLogin={login} error={loginError} busy={loginBusy}/>;
-  if (!profile)               return <LoginPage onLogin={login} error="Profile load failed — contact admin" busy={false}/>;
-  if (profile.is_banned)      return <BannedScreen onLogout={logout}/>;
+  if (!session)               return <><MobileStyles/><LoginPage onLogin={login} error={loginError} busy={loginBusy}/></>;
+  if (!profile)               return <><MobileStyles/><LoginPage onLogin={login} error="Profile load failed — contact admin" busy={false}/></>;
+  if (profile.is_banned)      return <><MobileStyles/><BannedScreen onLogout={logout}/></>;
 
-  return <TraineePortal profile={profile} onLogout={logout}/>;
+  return <><MobileStyles/><TraineePortal profile={profile} onLogout={logout}/></>;
+}
+
+/* ══════════════════════════════ MOBILE STYLES ══════════════════════════════ */
+/* One global stylesheet with @media (max-width:768px) overrides. Desktop is untouched. */
+function MobileStyles() {
+  return (
+    <style>{`
+      /* ── Base safety ── */
+      @media (max-width: 768px) {
+        html, body, #root { overflow-x: hidden !important; }
+        * { -webkit-tap-highlight-color: transparent; }
+
+        /* ── Navbar ── */
+        .tf-navbar {
+          flex-wrap: wrap !important;
+          padding: 8px 10px !important;
+          height: auto !important;
+          gap: 8px !important;
+        }
+        .tf-navbar-subtitle { display: none !important; }
+        .tf-navbar-actions {
+          width: 100% !important;
+          justify-content: space-between !important;
+          gap: 6px !important;
+          padding-left: 0 !important;
+          margin-left: 0 !important;
+          border-left: none !important;
+          flex-wrap: wrap !important;
+        }
+        .tf-navbar-actions > button,
+        .tf-navbar-actions > div {
+          padding: 8px 10px !important;
+          font-size: 12px !important;
+          min-height: 44px !important;
+        }
+        .tf-btn-label { display: none !important; }
+        .tf-user-role { display: none !important; }
+        .tf-user-block { gap: 6px !important; padding-left: 0 !important; margin-left: 0 !important; border-left: none !important; }
+        .tf-user-name { font-size: 11px !important; max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        /* ── Stats ── */
+        .tf-stat-grid {
+          grid-template-columns: repeat(2, 1fr) !important;
+          gap: 10px !important;
+          margin-bottom: 16px !important;
+        }
+        .tf-stat-grid > div {
+          padding: 14px 12px !important;
+        }
+        .tf-stat-grid > div > div:nth-child(1) { font-size: 20px !important; }
+        .tf-stat-grid > div > div:nth-child(2) { font-size: 22px !important; }
+        .tf-stat-grid > div > div:nth-child(3) { font-size: 11px !important; }
+
+        /* ── Filter bar ── */
+        .tf-filter-bar {
+          flex-direction: column !important;
+          align-items: stretch !important;
+          padding: 12px !important;
+        }
+        .tf-filter-bar > * {
+          width: 100% !important;
+          min-width: 0 !important;
+        }
+        .tf-filter-bar select, .tf-filter-bar input {
+          min-height: 44px !important;
+          font-size: 14px !important;
+        }
+        .tf-filter-summary { font-size: 12px !important; margin-left: 0 !important; }
+
+        /* ── Page padding ── */
+        .tf-page { padding: 14px !important; }
+
+        /* ── Main trainee table → card cards on mobile ── */
+        .tf-trow-h { display: none !important; }
+        .tf-trow, .tf-trow-bottom {
+          grid-template-columns: auto 1fr !important;
+          row-gap: 8px !important;
+          column-gap: 10px !important;
+          padding: 14px !important;
+          border-radius: 12px !important;
+          margin: 8px !important;
+          background: #fff !important;
+          box-shadow: 0 2px 10px #0000080c !important;
+          border: 1.5px solid #e8eaf6 !important;
+          border-left-width: 4px !important;
+        }
+        /* Stack info cells; checkboxes go inside .tf-phases */
+        .tf-trow > *, .tf-trow-bottom > * { width: auto !important; }
+        .tf-trow > *:not(.tf-phases),
+        .tf-trow-bottom > *:not(.tf-phases) {
+          min-width: 0 !important;
+        }
+        /* First cell: small, right next to name */
+        .tf-trow > *:nth-child(1) { grid-column: 1; grid-row: 1; }
+        .tf-trow > *:nth-child(2) { grid-column: 2; grid-row: 1; }
+        .tf-trow > *:nth-child(3) { grid-column: 1 / -1; grid-row: 2; font-size: 13px !important; }
+        .tf-trow > *:nth-child(4) { grid-column: 1 / -1; grid-row: 3; justify-content: flex-start !important; }
+        .tf-trow > *:nth-child(5) { grid-column: 1 / -1; grid-row: 4; text-align: left !important; }
+        /* Bottom sections have no leading checkbox — start at col 1 */
+        .tf-trow-bottom > *:nth-child(1) { grid-column: 1 / -1; grid-row: 1; }
+        .tf-trow-bottom > *:nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
+        .tf-trow-bottom > *:nth-child(3) { grid-column: 1 / -1; grid-row: 3; justify-content: flex-start !important; text-align: left !important; }
+        .tf-trow-bottom > *:nth-child(4) { grid-column: 1 / -1; grid-row: 4; }
+        .tf-trow-bottom > *:nth-child(5) { grid-column: 1 / -1; grid-row: 5; text-align: left !important; }
+
+        /* The phase-cells wrapper → 6-column grid of bigger tap targets */
+        .tf-phases {
+          display: grid !important;
+          grid-template-columns: repeat(6, 1fr) !important;
+          gap: 10px !important;
+          grid-column: 1 / -1 !important;
+          padding-top: 10px !important;
+          border-top: 1px solid #f1f5f9 !important;
+          margin-top: 4px !important;
+        }
+        .tf-phases > div {
+          min-height: 40px !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          flex-direction: column;
+          gap: 3px;
+          font-size: 9px;
+        }
+        .tf-phases > div::after {
+          display: none; /* could show phase name label if desired */
+        }
+
+        /* Main table container: remove inner padding */
+        .tf-table-container {
+          border-radius: 14px !important;
+          border: none !important;
+          box-shadow: none !important;
+          background: transparent !important;
+          overflow: visible !important;
+        }
+
+        /* Bulk bar */
+        .tf-bulk-bar {
+          flex-direction: column !important;
+          align-items: stretch !important;
+          gap: 10px !important;
+        }
+
+        /* ── Bottom section row column templates override ── */
+        .tf-bottom-row-header { display: none !important; }
+
+        /* ── Modals: near-full screen ── */
+        .tf-modal-root { padding: 0 !important; }
+        .tf-modal-card {
+          width: 100vw !important;
+          max-width: 100vw !important;
+          height: 100vh !important;
+          max-height: 100vh !important;
+          border-radius: 0 !important;
+        }
+        .tf-modal-card > * { box-sizing: border-box; }
+
+        /* Trainee notes modal header ellipsis */
+        .tf-notes-modal .tf-modal-card { padding: 0; }
+
+        /* Day messages tabs — allow scroll on mobile, stays in one line */
+        .tf-day-tabs {
+          overflow-x: auto !important;
+          padding: 0 !important;
+        }
+        .tf-day-tabs::-webkit-scrollbar { display: none; }
+        .tf-day-tabs button {
+          flex: 0 0 auto !important;
+          padding: 12px 10px !important;
+          font-size: 12px !important;
+          min-width: 70px !important;
+        }
+
+        /* Login form: full width with safe padding */
+        .tf-login-form {
+          width: calc(100vw - 24px) !important;
+          max-width: 440px !important;
+          padding: 28px 22px !important;
+        }
+
+        /* Legend — wrap */
+        .tf-legend {
+          flex-direction: column !important;
+          align-items: flex-start !important;
+          gap: 8px !important;
+        }
+
+        /* Larger tap targets for checkboxes and dropdowns */
+        select, input[type="checkbox"], button {
+          min-height: 40px;
+        }
+        .tf-phases select, .tf-phases button { min-height: auto; }
+      }
+    `}</style>
+  );
 }
