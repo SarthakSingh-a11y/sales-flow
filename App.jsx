@@ -1445,14 +1445,17 @@ function TraineePortal({ profile, onLogout }) {
     const allDone   = PHASES.every(p => newPhases[p.key]);
     let newStatus   = t.status;
     let triggerOutcome = false;
-    if (t.status !== "Leaved" && t.status !== "Dropped") {
-      // Just became fully complete and hasn't been resolved yet → Pending + open outcome modal
-      if (allDone && !ALL_DONE_STATUSES.includes(t.status)) {
-        newStatus = "Pending";
-        triggerOutcome = true;
-      }
-      // Reverted from a terminal/Pending state by unchecking → back to In Progress
-      if (!allDone && ALL_DONE_STATUSES.includes(t.status)) newStatus = "In Progress";
+    // Convenience: when an active trainee just hit 11/11 for the first time,
+    // park them in Pending and open the outcome popup. Terminal statuses
+    // (Selected / Not Selected / Leaved / Dropped / Pending) are sticky —
+    // unchecking a box never silently demotes them anymore.
+    if (
+      allDone &&
+      t.status !== "Leaved" && t.status !== "Dropped" &&
+      !ALL_DONE_STATUSES.includes(t.status)
+    ) {
+      newStatus = "Pending";
+      triggerOutcome = true;
     }
     const updated = { ...t, phases: newPhases, status: newStatus };
     setTrainees(ts => ts.map(tr => tr.id === id ? updated : tr));
@@ -1487,14 +1490,31 @@ function TraineePortal({ profile, onLogout }) {
   const updateTrainee = (id, updates) => {
     const t = trainees.find(tr => tr.id === id); if (!t) return;
     const merged = { ...t, ...updates };
-    const allDone = PHASES.every(p => merged.phases[p.key]);
+    // If the user explicitly picked a status from the modal dropdown, respect it
+    // (no auto-modification — they can move anyone to Selected/Not Selected/Leaved
+    // at any time, regardless of how many checkboxes are ticked).
+    const userPickedStatus = updates.status !== undefined && updates.status !== t.status;
     let triggerOutcome = false;
-    if (merged.status !== "Leaved" && merged.status !== "Dropped") {
-      if (allDone && !ALL_DONE_STATUSES.includes(merged.status)) {
+    if (!userPickedStatus) {
+      // Status not changed by user → auto-promote to Pending if they just hit 11/11
+      const allDone = PHASES.every(p => merged.phases[p.key]);
+      if (
+        allDone &&
+        merged.status !== "Leaved" && merged.status !== "Dropped" &&
+        !ALL_DONE_STATUSES.includes(merged.status)
+      ) {
         merged.status = "Pending";
         triggerOutcome = true;
       }
-      if (!allDone && ALL_DONE_STATUSES.includes(merged.status)) merged.status = "In Progress";
+    }
+    // If user picked "Leaved" via the modal dropdown, route through the leave-reason modal
+    if (userPickedStatus && updates.status === "Leaved") {
+      // Save phase/notes changes WITHOUT changing status yet, then prompt for reason
+      const partial = { ...merged, status: t.status };
+      setTrainees(ts => ts.map(tr => tr.id === id ? partial : tr));
+      saveTrainee(partial);
+      setLeavedModal({ id, name: merged.name });
+      return;
     }
     setTrainees(ts => ts.map(tr => tr.id === id ? merged : tr));
     saveTrainee(merged);
