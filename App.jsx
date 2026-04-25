@@ -63,6 +63,19 @@ const STATUS_CONFIG = {
 const EMPTY_PHASES     = Object.fromEntries(PHASES.map(p => [p.key, false]));
 const EMPTY_PHASE_NOTES = Object.fromEntries(PHASES.map(p => [p.key, ""]));
 
+// Always render contacts as "+91 XXXXXXXXXX". Pure formatter — does not mutate the DB.
+function formatContact(c) {
+  if (!c) return "";
+  const s = String(c).trim();
+  if (s.startsWith("+91 ")) return s;
+  if (s.startsWith("+91"))  return "+91 " + s.slice(3).trim();
+  const digits = s.replace(/\D/g, "");
+  if (digits.length === 10)                              return "+91 " + digits;
+  if (digits.length === 12 && digits.startsWith("91"))   return "+91 " + digits.slice(2);
+  if (digits.length === 11 && digits.startsWith("0"))    return "+91 " + digits.slice(1);
+  return "+91 " + s;
+}
+
 const INITIAL_TRAINEES = [
   { id: 1, name: "Akansha",               contact: "+91 7491041071", status: "In Progress",  enrollDate: "2026-04-01",
     notes: "", phaseNotes: { ...EMPTY_PHASE_NOTES },
@@ -179,7 +192,7 @@ function TraineeNotesModal({ trainee, onClose, onUpdate, onDelete }) {
                 📋 {trainee.name}
               </div>
               <div style={{ fontSize:12, color:"#94a3b8", marginTop:1, display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
-                📱 {trainee.contact} · 📅 Enrolled {new Date(trainee.enrollDate || trainee.enroll_date).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"})}
+                📱 {formatContact(trainee.contact)} · 📅 Enrolled {new Date(trainee.enrollDate || trainee.enroll_date).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"})}
                 {trainee.onboarder && (
                   <span style={{ fontWeight:700, padding:"2px 8px", borderRadius:99, background: ONBOARDER_CONFIG[trainee.onboarder]?.bg||"#f1f5f9", color: ONBOARDER_CONFIG[trainee.onboarder]?.color||"#64748b", fontSize:11 }}>
                     👤 {trainee.onboarder}
@@ -484,7 +497,7 @@ function AddTraineeModal({ onClose, onAdd, isAdmin, defaultOnboarder }) {
           <h2 style={{ margin:0,fontSize:22,fontWeight:700,color:"#1e293b",fontFamily:"'Sora',sans-serif" }}>Add New Trainee</h2>
           <button onClick={onClose} style={{ background:"#f1f5f9",border:"none",borderRadius:8,width:32,height:32,cursor:"pointer",fontSize:18,color:"#64748b" }}>×</button>
         </div>
-        {[{label:"Full Name",key:"name",type:"text",placeholder:"e.g. Ayesha Khan"},{label:"WhatsApp Contact",key:"contact",type:"text",placeholder:"+91-300-0000000"},{label:"Enroll Date",key:"enrollDate",type:"date"}].map(({label,key,type,placeholder})=>(
+        {[{label:"Full Name",key:"name",type:"text",placeholder:"e.g. Ayesha Khan"},{label:"WhatsApp Contact",key:"contact",type:"text",placeholder:"+91 XXXXX XXXXX"},{label:"Enroll Date",key:"enrollDate",type:"date"}].map(({label,key,type,placeholder})=>(
           <div key={key} style={{ marginBottom:16 }}>
             <label style={{ display:"block",fontSize:13,fontWeight:600,color:"#475569",marginBottom:6 }}>{label}</label>
             <input type={type} value={form[key]} onChange={e=>set(key,e.target.value)} placeholder={placeholder} style={{ width:"100%",padding:"10px 14px",border:"2px solid #e2e8f0",borderRadius:10,fontSize:14,color:"#1e293b",outline:"none",boxSizing:"border-box",fontFamily:"inherit" }}/>
@@ -511,7 +524,7 @@ function AddTraineeModal({ onClose, onAdd, isAdmin, defaultOnboarder }) {
         <div style={{ display:"flex",gap:12 }}>
           <button onClick={onClose} style={{ flex:1,padding:"11px",borderRadius:10,border:"2px solid #e2e8f0",background:"#fff",color:"#64748b",fontWeight:600,cursor:"pointer",fontSize:14,fontFamily:"inherit" }}>Cancel</button>
           <button
-            onClick={()=>{ if(canAdd){ onAdd({...form,status:"Not Started",phases:{...EMPTY_PHASES},phaseNotes:{...EMPTY_PHASE_NOTES}}); onClose(); }}}
+            onClick={()=>{ if(canAdd){ onAdd({...form, contact: formatContact(form.contact), status:"Not Started", phases:{...EMPTY_PHASES}, phaseNotes:{...EMPTY_PHASE_NOTES}}); onClose(); }}}
             style={{ flex:2,padding:"11px",borderRadius:10,border:"none",background: canAdd ? "linear-gradient(135deg,#6366f1,#8b5cf6)" : "#e2e8f0",color: canAdd ? "#fff" : "#94a3b8",fontWeight:700,cursor: canAdd ? "pointer" : "not-allowed",fontSize:14,fontFamily:"inherit",boxShadow: canAdd ? "0 4px 16px #6366f144" : "none",transition:"all 0.2s" }}
           >+ Add Trainee</button>
         </div>
@@ -1950,7 +1963,7 @@ function TraineePortal({ profile, onLogout }) {
                 </div>
 
                 {/* Contact */}
-                <div style={{ fontSize:13,color:"#64748b",display:"flex",alignItems:"center",gap:6 }}>📱 {trainee.contact}</div>
+                <div style={{ fontSize:13,color:"#64748b",display:"flex",alignItems:"center",gap:6 }}>📱 {formatContact(trainee.contact)}</div>
 
                 {/* Onboarder — admins get a dropdown, employees see a read-only badge */}
                 <div style={{ display:"flex",alignItems:"center",justifyContent:"center" }} onClick={e=>e.stopPropagation()}>
@@ -2089,7 +2102,7 @@ function TraineePortal({ profile, onLogout }) {
                           </div>
                         </div>
                       </div>
-                      <div style={{ fontSize:13,color:"#64748b",display:"flex",alignItems:"center",gap:6 }}>📱 {trainee.contact}</div>
+                      <div style={{ fontSize:13,color:"#64748b",display:"flex",alignItems:"center",gap:6 }}>📱 {formatContact(trainee.contact)}</div>
                       <div style={{ display:"flex",alignItems:"center",justifyContent:"center",gap:6 }} onClick={e=>e.stopPropagation()}>
                         <button onClick={()=>confirmOutcome(trainee.id,"Selected")} title="Selected" style={{
                           padding:"5px 10px", borderRadius:7, border:"none",
@@ -2188,7 +2201,7 @@ function TraineePortal({ profile, onLogout }) {
                           </div>
                         </div>
                       </div>
-                      <div style={{ fontSize:13,color:"#64748b",display:"flex",alignItems:"center",gap:6 }}>📱 {trainee.contact}</div>
+                      <div style={{ fontSize:13,color:"#64748b",display:"flex",alignItems:"center",gap:6 }}>📱 {formatContact(trainee.contact)}</div>
                       <div style={{ display:"flex",alignItems:"center",justifyContent:"center" }} onClick={e=>e.stopPropagation()}>
                         <select value={trainee.status} onChange={e=>changeTraineeStatus(trainee.id,e.target.value)} style={{
                           padding:"5px 8px", borderRadius:7, fontSize:11, fontWeight:700, cursor:"pointer", outline:"none", fontFamily:"inherit",
@@ -2284,7 +2297,7 @@ function TraineePortal({ profile, onLogout }) {
                           </div>
                         </div>
                       </div>
-                      <div style={{ fontSize:13,color:"#64748b",display:"flex",alignItems:"center",gap:6 }}>📱 {trainee.contact}</div>
+                      <div style={{ fontSize:13,color:"#64748b",display:"flex",alignItems:"center",gap:6 }}>📱 {formatContact(trainee.contact)}</div>
                       <div style={{ display:"flex",alignItems:"center",justifyContent:"center" }} onClick={e=>e.stopPropagation()}>
                         <select value={trainee.status} onChange={e=>changeTraineeStatus(trainee.id,e.target.value)} style={{
                           padding:"5px 8px", borderRadius:7, fontSize:11, fontWeight:700, cursor:"pointer", outline:"none", fontFamily:"inherit",
@@ -2382,7 +2395,7 @@ function TraineePortal({ profile, onLogout }) {
                           </div>
                         </div>
                       </div>
-                      <div style={{ fontSize:13,color:"#64748b",display:"flex",alignItems:"center",gap:6 }}>📱 {trainee.contact}</div>
+                      <div style={{ fontSize:13,color:"#64748b",display:"flex",alignItems:"center",gap:6 }}>📱 {formatContact(trainee.contact)}</div>
                       {/* Reason */}
                       <div style={{ fontSize:12,color:"#64748b",lineHeight:1.5,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" }} title={trainee.leavedReason||""}>
                         {trainee.leavedReason ? (
