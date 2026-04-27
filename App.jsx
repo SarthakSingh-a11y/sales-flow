@@ -1184,6 +1184,7 @@ function TraineePortal({ profile, onLogout }) {
   const [showMobileMenu,   setShowMobileMenu]   = useState(false); // mobile drawer
   const [toast,            setToast]            = useState(null); // { type:"success"|"error", msg }
   const pendingSaves = useRef(new Set()); // IDs currently mid-save — blocks real-time bounce-back
+  const onboarderUserMap = useRef({});    // { "Sarthak": "uuid", "Archita": "uuid", ... } — for reassigning created_by
   const DEFAULT_MESSAGES = {
     intro:"Hi {name}! 👋 Welcome to the DMH Sales Training Program!\n\nWe're excited to have you on board. Here's a quick intro to what the program looks like:\n\n📌 This is a structured 8-day training.\n✅ Each day has specific tasks you need to complete.\n💬 I'll be messaging you daily with your tasks.\n🔓 Each phase unlocks after the previous one is done.\n\nGet ready — let's build something great together! 🚀",
     1:"Hi {name}! 👋 Welcome to Day 1 of the Sales Training Program. Today your tasks are:\n1️⃣ Build your Shopify Store\n2️⃣ Build your Anti-Gravity Website\n3️⃣ Watch the Day 1 Videos\n\nLet me know once done! 💪",
@@ -1364,6 +1365,28 @@ function TraineePortal({ profile, onLogout }) {
     recomputeDayMessages();
     showToast("success", "Reverted to default");
   };
+
+  // ── Load onboarder name → user_id map (admin only — needed to reassign created_by) ──
+  useEffect(() => {
+    if (!isAdmin) return;
+    const loadMap = async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, name, email")
+        .eq("is_banned", false);
+      if (error) { console.warn("onboarder map load failed:", error); return; }
+      const map = {};
+      (data || []).forEach(p => {
+        const key = (p.name || "").trim();
+        if (key && !map[key]) map[key] = p.id;
+        // Also index by email username (e.g. "archita@..." → "archita")
+        const emailKey = (p.email || "").split("@")[0].trim();
+        if (emailKey && !map[emailKey]) map[emailKey] = p.id;
+      });
+      onboarderUserMap.current = map;
+    };
+    loadMap();
+  }, [isAdmin]);
 
   // ── Real-time subscriptions — reflect changes from ANY device instantly ──
   useEffect(() => {
@@ -1565,20 +1588,24 @@ function TraineePortal({ profile, onLogout }) {
 
   const changeOnboarder = async (id, newOnboarder) => {
     const t = trainees.find(tr => tr.id === id); if (!t) return;
+    // Look up the user_id for the new onboarder name; if unknown, skip created_by reassignment
+    const newOwnerId = onboarderUserMap.current[newOnboarder] || null;
+    const updatePayload = { onboarder: newOnboarder };
+    if (newOwnerId) updatePayload.created_by = newOwnerId;
     // Optimistic local update
-    setTrainees(ts => ts.map(tr => tr.id === id ? { ...tr, onboarder: newOnboarder } : tr));
-    // Surgical update — only touches the onboarder column, nothing else
+    setTrainees(ts => ts.map(tr => tr.id === id ? { ...tr, onboarder: newOnboarder, created_by: newOwnerId || tr.created_by } : tr));
+    // Single update writes both columns atomically
     const { error } = await supabase
       .from("trainees")
-      .update({ onboarder: newOnboarder })
+      .update(updatePayload)
       .eq("id", id);
     if (error) {
-      console.error("changeOnboarder error:", error.message, error.details, error.hint, { id, newOnboarder });
+      console.error("changeOnboarder error:", error.message, error.details, error.hint, { id, newOnboarder, updatePayload });
       showToast("error", `Save failed: ${error.message || "check connection"}`);
       // Roll back optimistic update
-      setTrainees(ts => ts.map(tr => tr.id === id ? { ...tr, onboarder: t.onboarder } : tr));
+      setTrainees(ts => ts.map(tr => tr.id === id ? { ...tr, onboarder: t.onboarder, created_by: t.created_by } : tr));
     } else {
-      showToast("success", "Saved to server!");
+      showToast("success", newOwnerId ? `Reassigned to ${newOnboarder}` : "Saved to server!");
     }
   };
 
