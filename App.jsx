@@ -1400,8 +1400,8 @@ function TraineePortal({ profile, onLogout }) {
             const r = payload.new;
             // Skip if this tab is mid-save for this row — we already have the latest state
             if (pendingSaves.current.has(r.id)) return;
-            // Visibility: employees only see/react to rows they own
-            if (!isAdmin && r.created_by && r.created_by !== profile?.id) return;
+            // Visibility: employees only see/react to rows where onboarder matches their profile name
+            if (!isAdmin && profile?.name && r.onboarder !== profile.name) return;
             const mapped = {
               ...r,
               phases:     { ...EMPTY_PHASES,      ...(r.phases      || {}) },
@@ -1588,24 +1588,18 @@ function TraineePortal({ profile, onLogout }) {
 
   const changeOnboarder = async (id, newOnboarder) => {
     const t = trainees.find(tr => tr.id === id); if (!t) return;
-    // Look up the user_id for the new onboarder name; if unknown, skip created_by reassignment
-    const newOwnerId = onboarderUserMap.current[newOnboarder] || null;
-    const updatePayload = { onboarder: newOnboarder };
-    if (newOwnerId) updatePayload.created_by = newOwnerId;
-    // Optimistic local update
-    setTrainees(ts => ts.map(tr => tr.id === id ? { ...tr, onboarder: newOnboarder, created_by: newOwnerId || tr.created_by } : tr));
-    // Single update writes both columns atomically
+    // Optimistic local update — visibility is driven entirely by onboarder name now
+    setTrainees(ts => ts.map(tr => tr.id === id ? { ...tr, onboarder: newOnboarder } : tr));
     const { error } = await supabase
       .from("trainees")
-      .update(updatePayload)
+      .update({ onboarder: newOnboarder })
       .eq("id", id);
     if (error) {
-      console.error("changeOnboarder error:", error.message, error.details, error.hint, { id, newOnboarder, updatePayload });
+      console.error("changeOnboarder error:", error.message, error.details, error.hint, { id, newOnboarder });
       showToast("error", `Save failed: ${error.message || "check connection"}`);
-      // Roll back optimistic update
-      setTrainees(ts => ts.map(tr => tr.id === id ? { ...tr, onboarder: t.onboarder, created_by: t.created_by } : tr));
+      setTrainees(ts => ts.map(tr => tr.id === id ? { ...tr, onboarder: t.onboarder } : tr));
     } else {
-      showToast("success", newOwnerId ? `Reassigned to ${newOnboarder}` : "Saved to server!");
+      showToast("success", `Reassigned to ${newOnboarder}`);
     }
   };
 
