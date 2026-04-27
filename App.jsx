@@ -1159,7 +1159,7 @@ function AdminPanel({ currentUserId, onClose, showToast }) {
 }
 
 /* ═══════════════════════════════ MAIN PORTAL ═══════════════════════════════ */
-function TraineePortal({ profile, onLogout }) {
+function TraineePortal({ profile, onLogout, darkMode, onToggleDark }) {
   const isAdmin = profile?.role === "admin";
 
   const [trainees, setTrainees]   = useState([]);
@@ -1810,6 +1810,9 @@ function TraineePortal({ profile, onLogout }) {
                 <div className="tf-user-role" style={{ fontSize:10,fontWeight:700,color:"#6366f1",textTransform:"uppercase",letterSpacing:"0.05em" }}>Admin</div>
               )}
             </div>
+            <button onClick={onToggleDark} title={darkMode ? "Switch to light mode" : "Switch to dark mode"} aria-label="Toggle theme" className="tf-theme-toggle" style={{ background: darkMode ? "#1e293b" : "#f8fafc", color: darkMode ? "#fde047" : "#475569", border: `1.5px solid ${darkMode ? "#334155" : "#e2e8f0"}`, borderRadius:10, padding:"8px 12px", fontSize:14, cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", justifyContent:"center", minWidth:38 }}>
+              {darkMode ? "☀️" : "🌙"}
+            </button>
             <button onClick={onLogout} title="Log out" style={{ background:"#fff",color:"#ef4444",border:"1.5px solid #fecaca",borderRadius:10,padding:"8px 12px",fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit" }}>
               ↪<span className="tf-btn-label"> Logout</span>
             </button>
@@ -2591,6 +2594,13 @@ function TraineePortal({ profile, onLogout }) {
               </>
             )}
 
+            <button className="tf-drawer-item" onClick={()=>{ onToggleDark(); }}>
+              <span className="tf-drawer-icon" style={{ background: darkMode ? "#1e293b" : "#fef3c7", color: darkMode ? "#fde047" : "#ca8a04" }}>
+                {darkMode ? "☀️" : "🌙"}
+              </span>
+              <span>{darkMode ? "Light Mode" : "Dark Mode"}</span>
+            </button>
+
             <div style={{ marginTop:"auto" }}>
               <button className="tf-drawer-item tf-drawer-danger" onClick={()=>{ setShowMobileMenu(false); onLogout(); }}>
                 <span className="tf-drawer-icon" style={{ background:"#fff1f2", color:"#ef4444" }}>↪</span>
@@ -2611,6 +2621,19 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [loginError,  setLoginError]  = useState("");
   const [loginBusy,   setLoginBusy]   = useState(false);
+
+  // ── Theme (light / dark) — persisted in localStorage ──
+  const [darkMode, setDarkMode] = useState(() => {
+    try { return localStorage.getItem("tf-theme") === "dark"; }
+    catch { return false; }
+  });
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle("dark",  darkMode);
+    root.classList.toggle("light", !darkMode);
+    try { localStorage.setItem("tf-theme", darkMode ? "dark" : "light"); } catch {}
+  }, [darkMode]);
+  const toggleDarkMode = () => setDarkMode(d => !d);
 
   // Fetch (or create) the profile row for this user
   const fetchProfile = async (user) => {
@@ -2690,7 +2713,7 @@ export default function App() {
   if (!profile)               return <><MobileStyles/><LoginPage onLogin={login} error="Profile load failed — contact admin" busy={false}/></>;
   if (profile.is_banned)      return <><MobileStyles/><BannedScreen onLogout={logout}/></>;
 
-  return <><MobileStyles/><TraineePortal profile={profile} onLogout={logout}/></>;
+  return <><MobileStyles/><TraineePortal profile={profile} onLogout={logout} darkMode={darkMode} onToggleDark={toggleDarkMode}/></>;
 }
 
 /* ══════════════════════════════ MOBILE STYLES ══════════════════════════════ */
@@ -2705,6 +2728,206 @@ function MobileStyles() {
         .tf-drawer-overlay,
         .tf-drawer { display: none !important; }
       }
+
+      /* ═══════════════ SMOOTH THEME TRANSITIONS ═══════════════ */
+      html, body, .tf-navbar, .tf-page, .tf-stat-grid > div,
+      .tf-filter-bar, .tf-table-container, .tf-trow, .tf-trow-bottom,
+      .tf-modal-card, .tf-day-tabs, .tf-day-tabs button,
+      .tf-drawer, .tf-drawer-item, .tf-mobile-pills button,
+      .tf-bottom-row-header, .tf-legend, .tf-modal-root,
+      input, select, textarea, button {
+        transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease !important;
+      }
+
+      /* ═══════════════ DARK MODE OVERRIDES ═══════════════ */
+      html.dark, html.dark body { background: #0b1120 !important; color: #e2e8f0; }
+      html.dark { color-scheme: dark; }
+
+      /* App page background */
+      html.dark .tf-page,
+      html.dark > body > div { background: transparent !important; }
+      html.dark [style*="linear-gradient(160deg,#f8faff"] {
+        background: linear-gradient(160deg, #0b1120 0%, #111827 50%, #1a1330 100%) !important;
+      }
+
+      /* Navbar */
+      html.dark .tf-navbar {
+        background: #111827 !important;
+        border-bottom-color: #1e293b !important;
+        box-shadow: 0 2px 12px #00000044 !important;
+      }
+      html.dark .tf-navbar [style*="color:#1e293b"] { color: #f1f5f9 !important; }
+      html.dark .tf-navbar-subtitle,
+      html.dark [style*="color:#94a3b8"] { color: #94a3b8 !important; }
+      html.dark .tf-user-name { color: #f1f5f9 !important; }
+      html.dark .tf-user-block { border-left-color: #334155 !important; }
+
+      /* Theme toggle in navbar (already inline-styled, but elevate hover) */
+      html.dark .tf-theme-toggle:hover { background: #334155 !important; }
+
+      /* Cards (stat grid + trainee rows) */
+      html.dark .tf-stat-grid > div {
+        background: #1e293b !important;
+        border-color: #334155 !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.5), 0 4px 14px rgba(0,0,0,0.3) !important;
+      }
+      html.dark .tf-stat-grid > div > div { color: inherit !important; }
+      html.dark .tf-stat-grid > div [style*="color:#64748b"] { color: #94a3b8 !important; }
+
+      /* Filter bar */
+      html.dark .tf-filter-bar {
+        background: #1e293b !important;
+        border-color: #334155 !important;
+      }
+      html.dark .tf-filter-bar select,
+      html.dark .tf-filter-bar input,
+      html.dark select, html.dark input, html.dark textarea {
+        background: #0f172a !important;
+        color: #e2e8f0 !important;
+        border-color: #334155 !important;
+      }
+      html.dark input::placeholder, html.dark textarea::placeholder { color: #64748b !important; }
+      html.dark .tf-filter-summary { color: #94a3b8 !important; }
+
+      /* Mobile pills */
+      html.dark .tf-mobile-pills button {
+        background: #1e293b !important;
+        border-color: #334155 !important;
+        color: #cbd5e1 !important;
+      }
+      html.dark .tf-mobile-pills button.active {
+        background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
+        color: #fff !important;
+        border-color: transparent !important;
+      }
+
+      /* Main table */
+      html.dark .tf-table-container {
+        background: transparent !important;
+        border-color: #334155 !important;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.3) !important;
+      }
+      html.dark .tf-trow-h {
+        background: linear-gradient(135deg, #1e293b, #111827) !important;
+        border-bottom-color: #334155 !important;
+      }
+      html.dark .tf-trow-h [style*="color:#64748b"] { color: #94a3b8 !important; }
+      html.dark .tf-trow {
+        background: #1e293b !important;
+        border-bottom-color: #334155 !important;
+      }
+      html.dark .tf-trow:nth-child(odd) { background: #1a2233 !important; }
+      html.dark .tf-trow [style*="color:#1e293b"] { color: #f1f5f9 !important; }
+      html.dark .tf-trow [style*="color:#64748b"] { color: #94a3b8 !important; }
+
+      /* Hover state for trainee rows */
+      html.dark .tf-trow:hover { background: #243049 !important; }
+
+      /* Bulk action bar */
+      html.dark .tf-bulk-bar { background: linear-gradient(135deg, #2a1414, #3a1818) !important; border-color: #5a2a2a !important; }
+
+      /* Bottom section rows + headers */
+      html.dark .tf-trow-bottom {
+        background: #1e293b !important;
+        border-bottom-color: #334155 !important;
+      }
+      html.dark .tf-trow-bottom:nth-child(odd) { background: #1a2233 !important; }
+      html.dark .tf-trow-bottom [style*="color:#1e293b"] { color: #f1f5f9 !important; }
+      html.dark .tf-trow-bottom [style*="color:#64748b"] { color: #94a3b8 !important; }
+      html.dark .tf-bottom-row-header {
+        background: linear-gradient(135deg, #1e293b, #111827) !important;
+        border-bottom-color: #334155 !important;
+      }
+
+      /* Bottom section banner headers (Pending / Selected / Not Selected / Leaved) */
+      html.dark [style*="linear-gradient(135deg,#fefce8,#fef9c3)"] { background: linear-gradient(135deg, #2a2510, #3a3015) !important; border-color: #5a4a20 !important; }
+      html.dark [style*="linear-gradient(135deg,#f0fdfa,#ccfbf1)"] { background: linear-gradient(135deg, #0f2a26, #133a35) !important; border-color: #2a5a52 !important; }
+      html.dark [style*="linear-gradient(135deg,#fffbeb,#fef3c7)"] { background: linear-gradient(135deg, #2a2010, #3a3015) !important; border-color: #5a4520 !important; }
+      html.dark [style*="linear-gradient(135deg,#fff1f2,#ffe4e6)"] { background: linear-gradient(135deg, #2a1015, #3a151f) !important; border-color: #5a2030 !important; }
+
+      /* Modals */
+      html.dark .tf-modal-root { background: #00000099 !important; }
+      html.dark .tf-modal-card {
+        background: #111827 !important;
+        color: #e2e8f0 !important;
+        border-color: #1e293b !important;
+        box-shadow: 0 32px 80px #00000088 !important;
+      }
+      html.dark .tf-modal-card [style*="background:#fff"] { background: #1e293b !important; }
+      html.dark .tf-modal-card [style*="color:#1e293b"] { color: #f1f5f9 !important; }
+      html.dark .tf-modal-card [style*="color:#475569"] { color: #cbd5e1 !important; }
+      html.dark .tf-modal-card [style*="color:#64748b"] { color: #94a3b8 !important; }
+      html.dark .tf-modal-card [style*="background:#fafbff"] { background: #1a2233 !important; }
+      html.dark .tf-modal-card [style*="background:#f8faff"] { background: #1a2233 !important; }
+      html.dark .tf-modal-card [style*="background:#f1f5f9"] { background: #334155 !important; }
+      html.dark .tf-modal-card [style*="border:1.5px solid #e8eaf6"],
+      html.dark .tf-modal-card [style*="border:1.5px solid #e2e8f0"],
+      html.dark .tf-modal-card [style*="borderTop:1.5px solid #e8eaf6"],
+      html.dark .tf-modal-card [style*="borderBottom:1.5px solid #e8eaf6"] {
+        border-color: #334155 !important;
+      }
+
+      /* Day messages tabs */
+      html.dark .tf-day-tabs {
+        background: #0f172a !important;
+        border-bottom-color: #334155 !important;
+      }
+      html.dark .tf-day-tabs button { color: #94a3b8 !important; }
+
+      /* Drawer (mobile) */
+      html.dark .tf-drawer {
+        background: #111827 !important;
+        box-shadow: -12px 0 40px rgba(0, 0, 0, 0.6) !important;
+      }
+      html.dark .tf-drawer-header { border-bottom-color: #1e293b !important; }
+      html.dark .tf-drawer-header > div:first-child { color: #f1f5f9 !important; }
+      html.dark .tf-drawer-close {
+        background: #1e293b !important;
+        color: #cbd5e1 !important;
+      }
+      html.dark .tf-drawer-item { color: #e2e8f0 !important; }
+      html.dark .tf-drawer-item:active { background: #1e293b !important; }
+      html.dark .tf-drawer-danger { color: #f87171 !important; }
+
+      /* Login form */
+      html.dark .tf-login-form {
+        background: #111827 !important;
+        border-color: #1e293b !important;
+        box-shadow: 0 28px 80px rgba(0,0,0,0.5) !important;
+      }
+      html.dark .tf-login-form h1, html.dark .tf-login-form [style*="color:#1e293b"] { color: #f1f5f9 !important; }
+      html.dark .tf-login-form [style*="color:#475569"] { color: #cbd5e1 !important; }
+      html.dark .tf-login-form input { background: #0f172a !important; border-color: #334155 !important; color: #e2e8f0 !important; }
+
+      /* Legend (desktop) */
+      html.dark .tf-legend {
+        background: #1e293b !important;
+        border-color: #334155 !important;
+      }
+      html.dark .tf-legend [style*="color:#64748b"] { color: #cbd5e1 !important; }
+
+      /* Generic white-bg buttons that should darken */
+      html.dark button[style*="background:#fff"] { background: #1e293b !important; color: #cbd5e1 !important; border-color: #334155 !important; }
+
+      /* Toast — keep brand colours, just stronger shadow on dark */
+      html.dark [style*="position:fixed"][style*="bottom:24"] { box-shadow: 0 12px 32px rgba(0,0,0,0.6) !important; }
+
+      /* Section divider lines */
+      html.dark [style*="borderBottom:1px solid #f1f5f9"],
+      html.dark [style*="border-bottom:1px solid #f1f5f9"] { border-bottom-color: #1e293b !important; }
+      html.dark [style*="borderBottom:1.5px solid #e8eaf6"],
+      html.dark [style*="border-bottom:1.5px solid #e8eaf6"] { border-bottom-color: #334155 !important; }
+
+      /* Onboarder pill backgrounds — keep brand colours, slightly desaturated */
+      html.dark [style*="background:#eef2ff"] { background: #1e1b4b !important; }
+      html.dark [style*="background:#f0f9ff"] { background: #082f49 !important; }
+      html.dark [style*="background:#fdf2f8"] { background: #500724 !important; }
+      html.dark [style*="background:#f0fdfa"] { background: #042f2a !important; }
+      html.dark [style*="background:#fffbeb"] { background: #2c2210 !important; }
+      html.dark [style*="background:#fff1f2"] { background: #2c0a13 !important; }
+      html.dark [style*="background:#f5f3ff"] { background: #1f1633 !important; }
+      html.dark [style*="background:#f0fdf4"] { background: #052e16 !important; }
+      html.dark [style*="background:#fef9c3"] { background: #2a2510 !important; }
 
       /* ═══════════════ MOBILE (≤768px) ═══════════════ */
       @media (max-width: 768px) {
