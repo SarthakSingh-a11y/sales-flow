@@ -1328,6 +1328,8 @@ function TraineePortal({ profile, onLogout, darkMode, onToggleDark }) {
   const [outcomeModal,     setOutcomeModal]     = useState(null); // { id, name } — trainee awaiting outcome decision
   const [showAdminPanel,   setShowAdminPanel]   = useState(false); // admin-only user management modal
   const [showMobileMenu,   setShowMobileMenu]   = useState(false); // mobile drawer
+  const [showInstallSheet, setShowInstallSheet] = useState(false); // install-app modal
+  const installApp = useInstallApp();
   const [toast,            setToast]            = useState(null); // { type:"success"|"error", msg }
   const pendingSaves = useRef(new Set()); // IDs currently mid-save — blocks real-time bounce-back
   const onboarderUserMap = useRef({});    // { "Sarthak": "uuid", "Archita": "uuid", ... } — for reassigning created_by
@@ -2684,6 +2686,16 @@ function TraineePortal({ profile, onLogout, darkMode, onToggleDark }) {
         />
       )}
 
+      {showInstallSheet && (
+        <InstallSheet
+          onClose={()=>setShowInstallSheet(false)}
+          canNativeInstall={installApp.canNativeInstall}
+          isStandalone={installApp.isStandalone}
+          triggerInstall={installApp.triggerInstall}
+          platform={installApp.platform}
+        />
+      )}
+
       {/* ── Toast notification ── */}
       {toast && (
         <div style={{
@@ -2741,6 +2753,11 @@ function TraineePortal({ profile, onLogout, darkMode, onToggleDark }) {
                 </button>
               </>
             )}
+
+            <button className="tf-drawer-item" onClick={()=>{ setShowMobileMenu(false); setShowInstallSheet(true); }}>
+              <span className="tf-drawer-icon" style={{ background:"linear-gradient(135deg,#7C3AED,#6366F1)", color:"#fff" }}>📲</span>
+              <span>Install App</span>
+            </button>
 
             <button className="tf-drawer-item" onClick={()=>{ onToggleDark(); }}>
               <span className="tf-drawer-icon" style={{ background: darkMode ? "#1e293b" : "#fef3c7", color: darkMode ? "#fde047" : "#ca8a04" }}>
@@ -2857,15 +2874,205 @@ export default function App() {
     </div>
   );
 
-  if (!session)               return <><MobileStyles/><InstallPrompt/><LoginPage onLogin={login} error={loginError} busy={loginBusy}/></>;
-  if (!profile)               return <><MobileStyles/><InstallPrompt/><LoginPage onLogin={login} error="Profile load failed — contact admin" busy={false}/></>;
-  if (profile.is_banned)      return <><MobileStyles/><InstallPrompt/><BannedScreen onLogout={logout}/></>;
+  if (!session)               return <><MobileStyles/><LoginPage onLogin={login} error={loginError} busy={loginBusy}/></>;
+  if (!profile)               return <><MobileStyles/><LoginPage onLogin={login} error="Profile load failed — contact admin" busy={false}/></>;
+  if (profile.is_banned)      return <><MobileStyles/><BannedScreen onLogout={logout}/></>;
 
-  return <><MobileStyles/><InstallPrompt/><TraineePortal profile={profile} onLogout={logout} darkMode={darkMode} onToggleDark={toggleDarkMode}/></>;
+  return <><MobileStyles/><TraineePortal profile={profile} onLogout={logout} darkMode={darkMode} onToggleDark={toggleDarkMode}/></>;
 }
 
-/* ══════════════════════════════ INSTALL PROMPT ══════════════════════════════ */
+/* ══════════════════════════════ INSTALL SHEET (manual trigger) ══════════════════════════════ */
+// Hook: listens for beforeinstallprompt and tracks install state.
+// Returns { canNativeInstall, isStandalone, triggerInstall, platform }
+function useInstallApp() {
+  const [deferred, setDeferred]     = useState(null);
+  const [installed, setInstalled]   = useState(false);
+
+  useEffect(() => {
+    const onPrompt = (e) => { e.preventDefault(); setDeferred(e); };
+    const onInstalled = () => { setInstalled(true); setDeferred(null); };
+    window.addEventListener("beforeinstallprompt", onPrompt);
+    window.addEventListener("appinstalled", onInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onPrompt);
+      window.removeEventListener("appinstalled", onInstalled);
+    };
+  }, []);
+
+  const isStandalone =
+    typeof window !== "undefined" &&
+    (window.matchMedia?.("(display-mode: standalone)").matches ||
+     window.navigator.standalone === true);
+
+  const ua = typeof window !== "undefined" ? (window.navigator.userAgent || "") : "";
+  const isIOS     = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+  const isAndroid = /Android/i.test(ua);
+  const platform  = isIOS ? "ios" : isAndroid ? "android" : "desktop";
+
+  const triggerInstall = async () => {
+    if (!deferred) return { outcome: "no-prompt" };
+    deferred.prompt();
+    try {
+      const { outcome } = await deferred.userChoice;
+      if (outcome === "accepted") setDeferred(null);
+      return { outcome };
+    } catch {
+      return { outcome: "error" };
+    }
+  };
+
+  return {
+    canNativeInstall: !!deferred,
+    isStandalone: isStandalone || installed,
+    triggerInstall,
+    platform,
+  };
+}
+
+// Modal sheet that opens when the user taps "Install App" in the drawer.
+// Renders the right content for native-prompt / iOS / desktop / already-installed.
+function InstallSheet({ onClose, canNativeInstall, isStandalone, triggerInstall, platform }) {
+  const [busy, setBusy] = useState(false);
+
+  const onInstallClick = async () => {
+    setBusy(true);
+    await triggerInstall();
+    setBusy(false);
+    onClose();
+  };
+
+  return (
+    <div onClick={onClose} style={{
+      position:"fixed", inset:0, zIndex:9999,
+      background:"rgba(0,0,0,0.65)", backdropFilter:"blur(4px)",
+      display:"flex", alignItems:"flex-end", justifyContent:"center",
+      fontFamily:"'DM Sans', sans-serif",
+      animation:"tfFade 0.2s ease",
+    }}>
+      <div onClick={e=>e.stopPropagation()} style={{
+        width:"100%", maxWidth:520, background:"#fff",
+        borderRadius:"22px 22px 0 0", padding:"22px 22px 32px",
+        boxShadow:"0 -16px 40px rgba(0,0,0,0.3)",
+        animation:"tfInstallIn 0.3s cubic-bezier(0.4,0,0.2,1)",
+      }}>
+        <div style={{ width:42, height:5, background:"#cbd5e1", borderRadius:99, margin:"0 auto 16px" }}/>
+        <div style={{ textAlign:"center", marginBottom:18 }}>
+          <div style={{ fontSize:46, marginBottom:8 }}>📲</div>
+          <div style={{ fontFamily:"'Sora',sans-serif", fontWeight:800, fontSize:19, color:"#1e293b" }}>
+            Install TrainFlow Pro
+          </div>
+          <div style={{ fontSize:13, color:"#64748b", marginTop:6, lineHeight:1.5 }}>
+            {isStandalone
+              ? "You're already using the installed app! Find the TF icon on your home screen."
+              : "Add it to your home screen to use it like a native app — works offline and opens fullscreen."}
+          </div>
+        </div>
+
+        {/* Already installed: show confirmation only */}
+        {isStandalone ? (
+          <button onClick={onClose} style={{
+            width:"100%", padding:"14px",
+            borderRadius:11, border:"none",
+            background:"linear-gradient(135deg,#10b981,#059669)", color:"#fff",
+            fontWeight:800, fontSize:14, cursor:"pointer", fontFamily:"inherit",
+            boxShadow:"0 4px 14px rgba(16,185,129,0.35)",
+          }}>✓ Already installed</button>
+        ) : canNativeInstall ? (
+          /* Android Chrome / Edge / Samsung — one-tap install */
+          <>
+            <button onClick={onInstallClick} disabled={busy} style={{
+              width:"100%", padding:"14px",
+              borderRadius:11, border:"none",
+              background: busy ? "#cbd5e1" : "linear-gradient(135deg,#7C3AED,#6366F1)",
+              color:"#fff", fontWeight:800, fontSize:15,
+              cursor: busy ? "wait" : "pointer", fontFamily:"inherit",
+              boxShadow: busy ? "none" : "0 6px 20px rgba(124,58,237,0.35)",
+              display:"flex", alignItems:"center", justifyContent:"center", gap:8,
+            }}>
+              {busy ? "Installing…" : "📥 Install App"}
+            </button>
+            <div style={{ fontSize:11, color:"#94a3b8", textAlign:"center", marginTop:10 }}>
+              You'll see your phone's confirmation prompt.
+            </div>
+          </>
+        ) : platform === "ios" ? (
+          /* iPhone Safari — manual instructions */
+          <>
+            {[
+              { n:"1", title:"Tap the Share button",     desc:"At the bottom of Safari",     icon:"⬆" },
+              { n:"2", title:'Choose "Add to Home Screen"', desc:"Scroll down in the share menu", icon:"➕" },
+              { n:"3", title:'Tap "Add"',                desc:"Top-right of the next screen", icon:"✓" },
+            ].map(s => (
+              <div key={s.n} style={{
+                display:"flex", alignItems:"center", gap:14,
+                padding:"12px 14px", marginBottom:10,
+                background:"#f8faff", borderRadius:12,
+                border:"1.5px solid #e0e7ff",
+              }}>
+                <div style={{
+                  width:34, height:34, borderRadius:10,
+                  background:"linear-gradient(135deg,#7C3AED,#6366F1)", color:"#fff",
+                  fontWeight:800, fontSize:14,
+                  display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0,
+                }}>{s.n}</div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontWeight:700, fontSize:14, color:"#1e293b" }}>{s.title}</div>
+                  <div style={{ fontSize:12, color:"#64748b", marginTop:2 }}>{s.desc}</div>
+                </div>
+                <div style={{ fontSize:22, opacity:0.7 }}>{s.icon}</div>
+              </div>
+            ))}
+          </>
+        ) : (
+          /* Android without prompt event yet (early visit) or desktop */
+          <>
+            {[
+              { n:"1", title:"Open browser menu", desc:"Tap the ⋮ in the top-right", icon:"⋮" },
+              { n:"2", title:'Pick "Install app"', desc:"Or 'Add to Home Screen'", icon:"📥" },
+              { n:"3", title:'Tap "Install"', desc:"Confirm in the popup", icon:"✓" },
+            ].map(s => (
+              <div key={s.n} style={{
+                display:"flex", alignItems:"center", gap:14,
+                padding:"12px 14px", marginBottom:10,
+                background:"#f8faff", borderRadius:12,
+                border:"1.5px solid #e0e7ff",
+              }}>
+                <div style={{
+                  width:34, height:34, borderRadius:10,
+                  background:"linear-gradient(135deg,#7C3AED,#6366F1)", color:"#fff",
+                  fontWeight:800, fontSize:14,
+                  display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0,
+                }}>{s.n}</div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontWeight:700, fontSize:14, color:"#1e293b" }}>{s.title}</div>
+                  <div style={{ fontSize:12, color:"#64748b", marginTop:2 }}>{s.desc}</div>
+                </div>
+                <div style={{ fontSize:22, opacity:0.7 }}>{s.icon}</div>
+              </div>
+            ))}
+            <div style={{ fontSize:11, color:"#94a3b8", textAlign:"center", marginTop:10, lineHeight:1.5 }}>
+              On desktop, look for the small ⊕ install icon in the address bar.
+            </div>
+          </>
+        )}
+
+        <button onClick={onClose} style={{
+          width:"100%", marginTop:12, padding:"12px",
+          borderRadius:11, border:"1.5px solid #e2e8f0",
+          background:"#fff", color:"#64748b",
+          fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit",
+        }}>Close</button>
+        <style>{`@keyframes tfFade{from{opacity:0}to{opacity:1}}@keyframes tfInstallIn{from{transform:translateY(140%);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
+      </div>
+    </div>
+  );
+}
+
+// Legacy auto-popup component kept as a no-op for backward compat (no longer rendered)
 function InstallPrompt() {
+  return null;
+}
+function _UnusedInstallPromptOld() {
   const [deferred, setDeferred] = useState(null);
   const [variant,  setVariant]  = useState("hidden"); // "hidden" | "android" | "ios"
   const [iosOpen,  setIosOpen]  = useState(false);
