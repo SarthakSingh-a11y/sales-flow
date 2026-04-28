@@ -134,13 +134,15 @@ function PhaseCheckbox({ checked, onChange, overdue }) {
 
 /* ─── Trainee Notes Modal ─── */
 function TraineeNotesModal({ trainee, onClose, onUpdate, onDelete }) {
-  const [activeTab, setActiveTab] = useState(PHASES[0].key);
+  const [activeTab, setActiveTab] = useState("cv");
   const [phases, setPhases]       = useState({ ...trainee.phases });
   const [phaseNotes, setPhaseNotes] = useState({ ...(trainee.phaseNotes || EMPTY_PHASE_NOTES) });
   const [generalNotes, setGeneralNotes] = useState(trainee.notes || "");
   const [status, setStatus] = useState(trainee.status);
   const [certImage, setCertImage] = useState(trainee.certificateImage || "");
   const [certText, setCertText]   = useState(trainee.certificateText || "");
+  const [cvUrl, setCvUrl]         = useState(trainee.cvUrl || trainee.cv_url || "");
+  const [cvUploading, setCvUploading] = useState(false);
 
   const handleCertUpload = (e) => {
     const file = e.target.files?.[0];
@@ -150,8 +152,33 @@ function TraineeNotesModal({ trainee, onClose, onUpdate, onDelete }) {
     reader.readAsDataURL(file);
   };
 
+  const handleCvUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCvUploading(true);
+    try {
+      const ext = (file.name.split(".").pop() || "pdf").toLowerCase();
+      const path = `${trainee.id}_cv.${ext}`;
+      // Upsert (overwrite if it exists)
+      const { error: upErr } = await supabase.storage
+        .from("trainee-cvs")
+        .upload(path, file, { cacheControl: "3600", upsert: true, contentType: file.type });
+      if (upErr) { alert(`Upload failed: ${upErr.message}`); console.error(upErr); setCvUploading(false); return; }
+      const { data: { publicUrl } } = supabase.storage.from("trainee-cvs").getPublicUrl(path);
+      // Cache-buster so the new file shows immediately
+      const url = `${publicUrl}?t=${Date.now()}`;
+      setCvUrl(url);
+      // Save right away to Supabase so it persists even if user closes without "Save Changes"
+      await supabase.from("trainees").update({ cv_url: url }).eq("id", trainee.id);
+    } catch (err) { console.error(err); alert("Upload failed"); }
+    setCvUploading(false);
+  };
+
+  const isCvImage = cvUrl && /\.(jpg|jpeg|png|gif|webp|bmp)(\?|$)/i.test(cvUrl);
+  const isCvPdf   = cvUrl && /\.pdf(\?|$)/i.test(cvUrl);
+
   const save = () => {
-    onUpdate(trainee.id, { phases, phaseNotes, notes: generalNotes, status, certificateImage: certImage, certificateText: certText });
+    onUpdate(trainee.id, { phases, phaseNotes, notes: generalNotes, status, certificateImage: certImage, certificateText: certText, cvUrl });
     onClose();
   };
 
@@ -230,6 +257,18 @@ function TraineeNotesModal({ trainee, onClose, onUpdate, onDelete }) {
           borderBottom:"1.5px solid #e8eaf6",
           background:"#fafbff", padding:"0 16px",
         }}>
+          {/* CV tab — always first */}
+          <button onClick={()=>setActiveTab("cv")} style={{
+            padding:"11px 14px", border:"none", background:"transparent",
+            borderBottom: activeTab==="cv" ? "3px solid #6366f1" : "3px solid transparent",
+            color: activeTab==="cv" ? "#6366f1" : "#94a3b8",
+            fontWeight: activeTab==="cv" ? 700 : 500,
+            fontSize:12, cursor:"pointer", whiteSpace:"nowrap",
+            fontFamily:"inherit", display:"flex", alignItems:"center", gap:5,
+            transition:"all 0.15s",
+          }}>
+            📄 CV {cvUrl && <span style={{ color:"#22c55e", fontSize:10 }}>✓</span>}
+          </button>
           {PHASES.map(p => {
             const done = phases[p.key];
             const hasNote = !!(phaseNotes[p.key]?.trim());
@@ -264,7 +303,69 @@ function TraineeNotesModal({ trainee, onClose, onUpdate, onDelete }) {
 
         {/* Tab Content */}
         <div style={{ flex:1, overflowY:"auto", padding:24 }}>
-          {activeTab === "general" ? (
+          {activeTab === "cv" ? (
+            <div>
+              <div style={{ fontWeight:700, fontSize:14, color:"#1e293b", marginBottom:14, display:"flex", alignItems:"center", gap:8 }}>
+                📄 Trainee CV
+              </div>
+
+              {!cvUrl ? (
+                <label style={{
+                  display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+                  padding:"44px 20px", cursor: cvUploading ? "wait" : "pointer", gap:10,
+                  border:"2px dashed #c7d2fe", borderRadius:14, background:"#f8faff",
+                  transition:"all 0.2s",
+                }}>
+                  <div style={{ fontSize:40 }}>{cvUploading ? "⏳" : "📤"}</div>
+                  <div style={{ fontSize:14, fontWeight:700, color:"#6366f1" }}>
+                    {cvUploading ? "Uploading…" : "Upload trainee CV (PDF or image)"}
+                  </div>
+                  <div style={{ fontSize:11, color:"#94a3b8" }}>Click to choose a file</div>
+                  <input type="file" accept="application/pdf,image/*" disabled={cvUploading} onChange={handleCvUpload} style={{ display:"none" }}/>
+                </label>
+              ) : (
+                <div style={{
+                  border:"1.5px solid #e0e7ff", borderRadius:14, overflow:"hidden",
+                  background:"#fafbff",
+                }}>
+                  {isCvImage ? (
+                    <img src={cvUrl} alt="Trainee CV" style={{ width:"100%", maxHeight:420, objectFit:"contain", display:"block", background:"#fff" }}/>
+                  ) : (
+                    <div style={{ padding:"50px 20px", textAlign:"center", background:"#fff" }}>
+                      <div style={{ fontSize:54, marginBottom:10 }}>📄</div>
+                      <div style={{ fontSize:14, fontWeight:700, color:"#1e293b", marginBottom:6 }}>
+                        {isCvPdf ? "PDF Document" : "Document"}
+                      </div>
+                      <div style={{ fontSize:11, color:"#94a3b8" }}>Tap "View CV" to open in a new tab</div>
+                    </div>
+                  )}
+                  <div style={{ padding:"12px 16px", borderTop:"1px solid #e0e7ff", display:"flex", flexWrap:"wrap", gap:8, alignItems:"center", justifyContent:"space-between" }}>
+                    <span style={{ fontSize:11, color:"#22c55e", fontWeight:700 }}>✓ CV uploaded</span>
+                    <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                      <a href={cvUrl} target="_blank" rel="noopener noreferrer" style={{
+                        padding:"7px 14px", borderRadius:8, background:"linear-gradient(135deg,#6366f1,#8b5cf6)",
+                        color:"#fff", fontWeight:700, fontSize:11, textDecoration:"none", fontFamily:"inherit",
+                        boxShadow:"0 3px 10px #6366f133",
+                      }}>📄 View CV</a>
+                      <a href={cvUrl} download style={{
+                        padding:"7px 14px", borderRadius:8, background:"linear-gradient(135deg,#0ea5e9,#06b6d4)",
+                        color:"#fff", fontWeight:700, fontSize:11, textDecoration:"none", fontFamily:"inherit",
+                        boxShadow:"0 3px 10px #0ea5e933",
+                      }}>⬇ Download</a>
+                      <label style={{
+                        padding:"7px 14px", borderRadius:8, border:"1.5px solid #c7d2fe",
+                        background:"#eef2ff", color:"#6366f1", fontWeight:700, fontSize:11,
+                        cursor: cvUploading ? "wait" : "pointer", fontFamily:"inherit",
+                      }}>
+                        🔄 Replace
+                        <input type="file" accept="application/pdf,image/*" disabled={cvUploading} onChange={handleCvUpload} style={{ display:"none" }}/>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : activeTab === "general" ? (
             <div>
               <div style={{ fontWeight:700, fontSize:14, color:"#1e293b", marginBottom:12 }}>📝 General Notes</div>
               <textarea
@@ -412,6 +513,22 @@ function TraineeNotesModal({ trainee, onClose, onUpdate, onDelete }) {
               <div style={{ marginTop:20 }}>
                 <div style={{ fontSize:12, fontWeight:700, color:"#94a3b8", marginBottom:10, textTransform:"uppercase", letterSpacing:"0.05em" }}>All Phases Overview</div>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(6, 1fr)", gap:8 }}>
+                  {/* CV tile — first */}
+                  <div
+                    onClick={() => setActiveTab("cv")}
+                    style={{
+                      padding:"10px 8px", borderRadius:10, cursor:"pointer",
+                      border: activeTab==="cv" ? "2px solid #6366f1" : `1.5px solid ${cvUrl ? "#6366f144" : "#e8eaf6"}`,
+                      background: cvUrl ? "#eef2ff" : (activeTab==="cv" ? "#eef2ff" : "#fafbff"),
+                      textAlign:"center", transition:"all 0.15s",
+                    }}
+                  >
+                    <div style={{ fontSize:18 }}>📄</div>
+                    <div style={{ fontSize:10, fontWeight:700, color: cvUrl ? "#6366f1" : "#94a3b8", marginTop:3, lineHeight:1.3 }}>CV</div>
+                    <div style={{ marginTop:4, fontSize:10 }}>
+                      {cvUrl ? <span style={{ color:"#22c55e" }}>✓ Uploaded</span> : <span style={{ color:"#d1d5db" }}>—</span>}
+                    </div>
+                  </div>
                   {PHASES.map(p => {
                     const done = phases[p.key];
                     const hasRemark = !!(phaseNotes[p.key]?.trim());
@@ -1230,6 +1347,7 @@ function TraineePortal({ profile, onLogout, darkMode, onToggleDark }) {
       leavedReason:     t.leaved_reason || "",
       leavedDate:       t.leaved_date   || "",
       onboarder:        t.onboarder || "",
+      cvUrl:            t.cv_url || "",
     };
   };
 
@@ -1285,6 +1403,7 @@ function TraineePortal({ profile, onLogout, darkMode, onToggleDark }) {
       leaved_reason:     t.leavedReason || "",
       leaved_date:       t.leavedDate   || "",
       onboarder:         t.onboarder || "",
+      cv_url:            t.cvUrl || t.cv_url || "",
       // Preserve ownership — fall back to current user's id on first save (new trainee)
       created_by:        t.created_by || profile?.id || null,
     };
