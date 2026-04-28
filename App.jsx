@@ -2748,16 +2748,26 @@ function MobileStyles() {
          Accents preserved (purple, green, teal, amber, rose, etc.)
       ═══════════════════════════════════════════════════════════ */
 
-      html.dark, html.dark body {
-        background: #0F1117 !important;
+      html.dark, html.dark body, html.dark #root {
+        background: #0A0A0F !important;
+        background-image: none !important;
         color: #CBD5E1;
+        min-height: 100vh;
       }
       html.dark { color-scheme: dark; }
 
-      /* Page-level gradient → flat near-black */
-      html.dark [style*="linear-gradient(160deg,#f8faff"] {
-        background: #0F1117 !important;
+      /* Catch every soft pastel page-level gradient → flat near-black */
+      html.dark [style*="linear-gradient(160deg,#f8faff"],
+      html.dark [style*="linear-gradient(160deg, #f8faff"],
+      html.dark [style*="linear-gradient(160deg,#fff1f2"],
+      html.dark [style*="linear-gradient(160deg, #fff1f2"] {
+        background: #0A0A0F !important;
+        background-image: none !important;
       }
+
+      /* Any direct-child wrapper of body that's full-height should also be transparent
+         so the flat #0A0A0F shows through everywhere */
+      html.dark body > div { background: transparent; }
 
       /* ═══ NAVBAR ═══ */
       html.dark .tf-navbar {
@@ -2902,7 +2912,11 @@ function MobileStyles() {
       }
 
       /* ═══ MODALS ═══ */
-      html.dark .tf-modal-root { background: rgba(0, 0, 0, 0.7) !important; }
+      html.dark .tf-modal-root { background: rgba(0, 0, 0, 0.8) !important; }
+      /* Catch the inline backdrop colours used by the various modals */
+      html.dark [style*="background:#0008"],
+      html.dark [style*="background:#0009"],
+      html.dark [style*="background:#00000088"] { background: rgba(0,0,0,0.8) !important; }
       html.dark .tf-modal-card {
         background: #1E2130 !important;
         color: #CBD5E1 !important;
