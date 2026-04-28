@@ -2867,76 +2867,211 @@ export default function App() {
 /* ══════════════════════════════ INSTALL PROMPT ══════════════════════════════ */
 function InstallPrompt() {
   const [deferred, setDeferred] = useState(null);
-  const [visible,  setVisible]  = useState(false);
+  const [variant,  setVariant]  = useState("hidden"); // "hidden" | "android" | "ios"
+  const [iosOpen,  setIosOpen]  = useState(false);
 
   useEffect(() => {
-    // If already running standalone or user dismissed this session, never show
-    const dismissed = (() => {
-      try { return sessionStorage.getItem("tf-install-dismissed") === "1"; }
-      catch { return false; }
-    })();
+    // Skip if already installed (running in standalone)
     const standalone =
       window.matchMedia?.("(display-mode: standalone)").matches ||
       window.navigator.standalone === true;
-    if (dismissed || standalone) return;
+    if (standalone) return;
+
+    // Skip if user dismissed in the last 24h
+    let dismissedAt = 0;
+    try { dismissedAt = parseInt(localStorage.getItem("tf-install-dismissed-at") || "0", 10); } catch {}
+    if (Date.now() - dismissedAt < 24 * 60 * 60 * 1000) return;
+
+    // Detect iOS Safari (no beforeinstallprompt support — show manual instructions)
+    const ua = window.navigator.userAgent || "";
+    const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+    const isMobile = isIOS || /Android/i.test(ua) || window.matchMedia("(max-width: 768px)").matches;
 
     const onPrompt = (e) => {
       e.preventDefault();
       setDeferred(e);
-      setVisible(true);
+      setVariant("android");
     };
     window.addEventListener("beforeinstallprompt", onPrompt);
 
-    const onInstalled = () => { setVisible(false); setDeferred(null); };
+    const onInstalled = () => {
+      setVariant("hidden");
+      setDeferred(null);
+      try { localStorage.setItem("tf-install-dismissed-at", String(Date.now())); } catch {}
+    };
     window.addEventListener("appinstalled", onInstalled);
+
+    // iOS fallback — show a manual prompt after a short delay
+    let iosTimer;
+    if (isIOS && isMobile) {
+      iosTimer = setTimeout(() => setVariant("ios"), 1200);
+    }
 
     return () => {
       window.removeEventListener("beforeinstallprompt", onPrompt);
       window.removeEventListener("appinstalled", onInstalled);
+      if (iosTimer) clearTimeout(iosTimer);
     };
   }, []);
 
   const dismiss = () => {
-    setVisible(false);
-    try { sessionStorage.setItem("tf-install-dismissed", "1"); } catch {}
+    setVariant("hidden");
+    setIosOpen(false);
+    try { localStorage.setItem("tf-install-dismissed-at", String(Date.now())); } catch {}
   };
 
-  const install = async () => {
+  const installAndroid = async () => {
     if (!deferred) return;
     deferred.prompt();
-    try { await deferred.userChoice; } catch {}
+    try {
+      const { outcome } = await deferred.userChoice;
+      if (outcome === "accepted") {
+        setVariant("hidden");
+      }
+    } catch {}
     setDeferred(null);
-    setVisible(false);
   };
 
-  if (!visible) return null;
-  return (
-    <div style={{
-      position:"fixed", left:16, right:16, bottom:16, zIndex:9999,
-      background:"linear-gradient(135deg, #7C3AED, #6366F1)",
-      color:"#fff", borderRadius:14, padding:"14px 16px",
-      boxShadow:"0 12px 32px rgba(124, 58, 237, 0.35)",
-      display:"flex", alignItems:"center", gap:12,
-      fontFamily:"'DM Sans', sans-serif",
-      animation:"tfInstallIn 0.3s ease",
-      maxWidth:560, marginInline:"auto",
-    }}>
-      <div style={{ fontSize:24, lineHeight:1, flexShrink:0 }}>📲</div>
-      <div style={{ flex:1, minWidth:0 }}>
-        <div style={{ fontSize:14, fontWeight:800, lineHeight:1.2 }}>Install TrainFlow Pro</div>
-        <div style={{ fontSize:12, opacity:0.9, marginTop:2 }}>Add to your home screen for a native app feel.</div>
+  if (variant === "hidden") return null;
+
+  // ── Android / Chrome banner ──
+  if (variant === "android") {
+    return (
+      <div style={{
+        position:"fixed", left:12, right:12, bottom:12, zIndex:9999,
+        background:"linear-gradient(135deg, #7C3AED, #6366F1)",
+        color:"#fff", borderRadius:16, padding:"14px 14px",
+        boxShadow:"0 16px 40px rgba(124, 58, 237, 0.45)",
+        display:"flex", alignItems:"center", gap:12,
+        fontFamily:"'DM Sans', sans-serif",
+        animation:"tfInstallIn 0.35s cubic-bezier(0.4,0,0.2,1)",
+        maxWidth:560, marginInline:"auto",
+      }}>
+        <div style={{
+          width:42, height:42, borderRadius:11, background:"#fff",
+          display:"flex", alignItems:"center", justifyContent:"center",
+          flexShrink:0, fontSize:22,
+        }}>📲</div>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontSize:14, fontWeight:800, lineHeight:1.2 }}>Install TrainFlow Pro</div>
+          <div style={{ fontSize:12, opacity:0.92, marginTop:2 }}>One tap — add to your home screen.</div>
+        </div>
+        <button onClick={installAndroid} style={{
+          background:"#fff", color:"#7C3AED", border:"none", borderRadius:10,
+          padding:"10px 16px", fontWeight:800, fontSize:13,
+          cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap",
+          boxShadow:"0 4px 12px rgba(0,0,0,0.15)",
+        }}>Install</button>
+        <button onClick={dismiss} aria-label="Dismiss" style={{
+          background:"rgba(255,255,255,0.2)", color:"#fff", border:"none", borderRadius:10,
+          width:34, height:34, fontSize:20, cursor:"pointer", flexShrink:0,
+        }}>×</button>
+        <style>{`@keyframes tfInstallIn{from{transform:translateY(140%);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
       </div>
-      <button onClick={install} style={{
-        background:"#fff", color:"#7C3AED", border:"none", borderRadius:9,
-        padding:"8px 16px", fontWeight:800, fontSize:13,
-        cursor:"pointer", fontFamily:"inherit",
-      }}>Install</button>
-      <button onClick={dismiss} aria-label="Dismiss" style={{
-        background:"rgba(255,255,255,0.15)", color:"#fff", border:"none", borderRadius:9,
-        width:32, height:32, fontSize:18, cursor:"pointer",
-      }}>×</button>
-      <style>{`@keyframes tfInstallIn{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
-    </div>
+    );
+  }
+
+  // ── iOS Safari instructions ──
+  return (
+    <>
+      {!iosOpen ? (
+        <div style={{
+          position:"fixed", left:12, right:12, bottom:12, zIndex:9999,
+          background:"linear-gradient(135deg, #7C3AED, #6366F1)",
+          color:"#fff", borderRadius:16, padding:"14px 14px",
+          boxShadow:"0 16px 40px rgba(124, 58, 237, 0.45)",
+          display:"flex", alignItems:"center", gap:12,
+          fontFamily:"'DM Sans', sans-serif",
+          animation:"tfInstallIn 0.35s cubic-bezier(0.4,0,0.2,1)",
+          maxWidth:560, marginInline:"auto",
+        }}>
+          <div style={{
+            width:42, height:42, borderRadius:11, background:"#fff",
+            display:"flex", alignItems:"center", justifyContent:"center",
+            flexShrink:0, fontSize:22,
+          }}>📲</div>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontSize:14, fontWeight:800, lineHeight:1.2 }}>Install TrainFlow Pro</div>
+            <div style={{ fontSize:12, opacity:0.92, marginTop:2 }}>Add it to your home screen.</div>
+          </div>
+          <button onClick={()=>setIosOpen(true)} style={{
+            background:"#fff", color:"#7C3AED", border:"none", borderRadius:10,
+            padding:"10px 16px", fontWeight:800, fontSize:13,
+            cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap",
+            boxShadow:"0 4px 12px rgba(0,0,0,0.15)",
+          }}>How?</button>
+          <button onClick={dismiss} aria-label="Dismiss" style={{
+            background:"rgba(255,255,255,0.2)", color:"#fff", border:"none", borderRadius:10,
+            width:34, height:34, fontSize:20, cursor:"pointer", flexShrink:0,
+          }}>×</button>
+          <style>{`@keyframes tfInstallIn{from{transform:translateY(140%);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
+        </div>
+      ) : (
+        <div onClick={()=>setIosOpen(false)} style={{
+          position:"fixed", inset:0, zIndex:9999,
+          background:"rgba(0,0,0,0.65)", backdropFilter:"blur(4px)",
+          display:"flex", alignItems:"flex-end", justifyContent:"center",
+          padding:0, fontFamily:"'DM Sans', sans-serif",
+          animation:"tfFade 0.2s ease",
+        }}>
+          <div onClick={e=>e.stopPropagation()} style={{
+            width:"100%", maxWidth:520, background:"#fff",
+            borderRadius:"22px 22px 0 0", padding:"24px 22px 36px",
+            boxShadow:"0 -16px 40px rgba(0,0,0,0.3)",
+            animation:"tfInstallIn 0.3s cubic-bezier(0.4,0,0.2,1)",
+            position:"relative",
+          }}>
+            <div style={{
+              width:42, height:5, background:"#cbd5e1", borderRadius:99,
+              margin:"0 auto 18px",
+            }}/>
+            <div style={{ textAlign:"center", marginBottom:20 }}>
+              <div style={{ fontSize:46, marginBottom:8 }}>📲</div>
+              <div style={{ fontFamily:"'Sora',sans-serif", fontWeight:800, fontSize:19, color:"#1e293b" }}>
+                Install on iPhone
+              </div>
+              <div style={{ fontSize:13, color:"#64748b", marginTop:6 }}>
+                Add TrainFlow Pro to your home screen in 3 steps:
+              </div>
+            </div>
+
+            {[
+              { n:"1", title:"Tap the Share button", desc:"At the bottom of Safari", icon:"⬆" },
+              { n:"2", title:'Choose "Add to Home Screen"', desc:"Scroll down in the share menu", icon:"➕" },
+              { n:"3", title:'Tap "Add"', desc:"Top-right of the next screen", icon:"✓" },
+            ].map(step => (
+              <div key={step.n} style={{
+                display:"flex", alignItems:"center", gap:14,
+                padding:"12px 14px", marginBottom:10,
+                background:"#f8faff", borderRadius:12,
+                border:"1.5px solid #e0e7ff",
+              }}>
+                <div style={{
+                  width:34, height:34, borderRadius:10,
+                  background:"linear-gradient(135deg,#7C3AED,#6366F1)", color:"#fff",
+                  fontWeight:800, fontSize:14,
+                  display:"flex", alignItems:"center", justifyContent:"center",
+                  flexShrink:0,
+                }}>{step.n}</div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontWeight:700, fontSize:14, color:"#1e293b" }}>{step.title}</div>
+                  <div style={{ fontSize:12, color:"#64748b", marginTop:2 }}>{step.desc}</div>
+                </div>
+                <div style={{ fontSize:22, opacity:0.7 }}>{step.icon}</div>
+              </div>
+            ))}
+
+            <button onClick={dismiss} style={{
+              width:"100%", marginTop:14, padding:"13px",
+              borderRadius:11, border:"none",
+              background:"#f1f5f9", color:"#64748b",
+              fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit",
+            }}>Got it</button>
+          </div>
+          <style>{`@keyframes tfFade{from{opacity:0}to{opacity:1}}`}</style>
+        </div>
+      )}
+    </>
   );
 }
 
