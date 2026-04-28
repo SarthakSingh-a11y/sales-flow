@@ -2828,11 +2828,87 @@ export default function App() {
     </div>
   );
 
-  if (!session)               return <><MobileStyles/><LoginPage onLogin={login} error={loginError} busy={loginBusy}/></>;
-  if (!profile)               return <><MobileStyles/><LoginPage onLogin={login} error="Profile load failed — contact admin" busy={false}/></>;
-  if (profile.is_banned)      return <><MobileStyles/><BannedScreen onLogout={logout}/></>;
+  if (!session)               return <><MobileStyles/><InstallPrompt/><LoginPage onLogin={login} error={loginError} busy={loginBusy}/></>;
+  if (!profile)               return <><MobileStyles/><InstallPrompt/><LoginPage onLogin={login} error="Profile load failed — contact admin" busy={false}/></>;
+  if (profile.is_banned)      return <><MobileStyles/><InstallPrompt/><BannedScreen onLogout={logout}/></>;
 
-  return <><MobileStyles/><TraineePortal profile={profile} onLogout={logout} darkMode={darkMode} onToggleDark={toggleDarkMode}/></>;
+  return <><MobileStyles/><InstallPrompt/><TraineePortal profile={profile} onLogout={logout} darkMode={darkMode} onToggleDark={toggleDarkMode}/></>;
+}
+
+/* ══════════════════════════════ INSTALL PROMPT ══════════════════════════════ */
+function InstallPrompt() {
+  const [deferred, setDeferred] = useState(null);
+  const [visible,  setVisible]  = useState(false);
+
+  useEffect(() => {
+    // If already running standalone or user dismissed this session, never show
+    const dismissed = (() => {
+      try { return sessionStorage.getItem("tf-install-dismissed") === "1"; }
+      catch { return false; }
+    })();
+    const standalone =
+      window.matchMedia?.("(display-mode: standalone)").matches ||
+      window.navigator.standalone === true;
+    if (dismissed || standalone) return;
+
+    const onPrompt = (e) => {
+      e.preventDefault();
+      setDeferred(e);
+      setVisible(true);
+    };
+    window.addEventListener("beforeinstallprompt", onPrompt);
+
+    const onInstalled = () => { setVisible(false); setDeferred(null); };
+    window.addEventListener("appinstalled", onInstalled);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onPrompt);
+      window.removeEventListener("appinstalled", onInstalled);
+    };
+  }, []);
+
+  const dismiss = () => {
+    setVisible(false);
+    try { sessionStorage.setItem("tf-install-dismissed", "1"); } catch {}
+  };
+
+  const install = async () => {
+    if (!deferred) return;
+    deferred.prompt();
+    try { await deferred.userChoice; } catch {}
+    setDeferred(null);
+    setVisible(false);
+  };
+
+  if (!visible) return null;
+  return (
+    <div style={{
+      position:"fixed", left:16, right:16, bottom:16, zIndex:9999,
+      background:"linear-gradient(135deg, #7C3AED, #6366F1)",
+      color:"#fff", borderRadius:14, padding:"14px 16px",
+      boxShadow:"0 12px 32px rgba(124, 58, 237, 0.35)",
+      display:"flex", alignItems:"center", gap:12,
+      fontFamily:"'DM Sans', sans-serif",
+      animation:"tfInstallIn 0.3s ease",
+      maxWidth:560, marginInline:"auto",
+    }}>
+      <div style={{ fontSize:24, lineHeight:1, flexShrink:0 }}>📲</div>
+      <div style={{ flex:1, minWidth:0 }}>
+        <div style={{ fontSize:14, fontWeight:800, lineHeight:1.2 }}>Install TrainFlow Pro</div>
+        <div style={{ fontSize:12, opacity:0.9, marginTop:2 }}>Add to your home screen for a native app feel.</div>
+      </div>
+      <button onClick={install} style={{
+        background:"#fff", color:"#7C3AED", border:"none", borderRadius:9,
+        padding:"8px 16px", fontWeight:800, fontSize:13,
+        cursor:"pointer", fontFamily:"inherit",
+      }}>Install</button>
+      <button onClick={dismiss} aria-label="Dismiss" style={{
+        background:"rgba(255,255,255,0.15)", color:"#fff", border:"none", borderRadius:9,
+        width:32, height:32, fontSize:18, cursor:"pointer",
+      }}>×</button>
+      <style>{`@keyframes tfInstallIn{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
+    </div>
+  );
 }
 
 /* ══════════════════════════════ MOBILE STYLES ══════════════════════════════ */
