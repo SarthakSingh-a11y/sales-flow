@@ -177,6 +177,25 @@ function TraineeNotesModal({ trainee, onClose, onUpdate, onDelete }) {
   const isCvImage = cvUrl && /\.(jpg|jpeg|png|gif|webp|bmp)(\?|$)/i.test(cvUrl);
   const isCvPdf   = cvUrl && /\.pdf(\?|$)/i.test(cvUrl);
 
+  const handleCvRemove = async () => {
+    if (!cvUrl) return;
+    if (!confirm("Remove this CV permanently? This cannot be undone.")) return;
+    setCvUploading(true);
+    try {
+      // Derive the storage path from the URL — everything after "/trainee-cvs/"
+      const m = cvUrl.match(/\/trainee-cvs\/([^?]+)/);
+      const path = m ? decodeURIComponent(m[1]) : null;
+      if (path) {
+        const { error: rmErr } = await supabase.storage.from("trainee-cvs").remove([path]);
+        if (rmErr) console.warn("storage remove:", rmErr);
+      }
+      const { error: dbErr } = await supabase.from("trainees").update({ cv_url: null }).eq("id", trainee.id);
+      if (dbErr) { alert(`Remove failed: ${dbErr.message}`); console.error(dbErr); setCvUploading(false); return; }
+      setCvUrl("");
+    } catch (err) { console.error(err); alert("Remove failed"); }
+    setCvUploading(false);
+  };
+
   const save = () => {
     onUpdate(trainee.id, { phases, phaseNotes, notes: generalNotes, status, certificateImage: certImage, certificateText: certText, cvUrl });
     onClose();
@@ -360,6 +379,16 @@ function TraineeNotesModal({ trainee, onClose, onUpdate, onDelete }) {
                         🔄 Replace
                         <input type="file" accept="application/pdf,image/*" disabled={cvUploading} onChange={handleCvUpload} style={{ display:"none" }}/>
                       </label>
+                      <button
+                        type="button"
+                        onClick={handleCvRemove}
+                        disabled={cvUploading}
+                        style={{
+                          padding:"7px 14px", borderRadius:8, border:"1.5px solid #fecaca",
+                          background:"#fff1f2", color:"#dc2626", fontWeight:700, fontSize:11,
+                          cursor: cvUploading ? "wait" : "pointer", fontFamily:"inherit",
+                        }}
+                      >🗑 Remove</button>
                     </div>
                   </div>
                 </div>
