@@ -192,7 +192,7 @@ function TraineeNotesModal({ trainee, onClose, onUpdate, onDelete }) {
     }} className="tf-modal-root tf-notes-modal" onClick={onClose}>
       <div className="tf-modal-card" style={{
         background:"#fff", borderRadius:20, width:820, maxWidth:"97vw",
-        maxHeight:"90vh", display:"flex", flexDirection:"column",
+        height:"85vh", maxHeight:"85vh", display:"flex", flexDirection:"column",
         boxShadow:"0 32px 80px #0004",
         fontFamily:"'DM Sans', sans-serif",
         overflow:"hidden",
