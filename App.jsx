@@ -135,7 +135,7 @@ function PhaseCheckbox({ checked, onChange, overdue }) {
 }
 
 /* ─── Trainee Notes Modal ─── */
-function TraineeNotesModal({ trainee, onClose, onUpdate, onDelete }) {
+function TraineeNotesModal({ trainee, onClose, onUpdate, onDelete, onToast }) {
   const [activeTab, setActiveTab] = useState("cv");
   const [phases, setPhases]       = useState({ ...trainee.phases });
   const [phaseNotes, setPhaseNotes] = useState({ ...(trainee.phaseNotes || EMPTY_PHASE_NOTES) });
@@ -146,8 +146,9 @@ function TraineeNotesModal({ trainee, onClose, onUpdate, onDelete }) {
   const [cvUrl, setCvUrl]         = useState(trainee.cvUrl || trainee.cv_url || "");
   const [cvUploading, setCvUploading] = useState(false);
   const [interviewVideoUrl, setInterviewVideoUrl] = useState(trainee.interviewVideoUrl || trainee.interview_video_url || "");
-  const [ivUploading, setIvUploading]             = useState(false);
-  const [ivProgress, setIvProgress]               = useState(0); // 0–100
+  const [ivDraft,    setIvDraft]    = useState(""); // current input value
+  const [ivEditing,  setIvEditing]  = useState(false); // toggle between view + edit modes
+  const [ivSaving,   setIvSaving]   = useState(false);
 
   const handleCertUpload = (e) => {
     const file = e.target.files?.[0];
@@ -201,66 +202,54 @@ function TraineeNotesModal({ trainee, onClose, onUpdate, onDelete }) {
     setCvUploading(false);
   };
 
-  // ── Interview video upload ──
-  const handleInterviewUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith("video/") && !/\.(mp4|mov|webm|avi|mkv)$/i.test(file.name)) {
-      alert("Please choose a video file (MP4, MOV, WEBM, AVI).");
-      return;
-    }
-    setIvUploading(true);
-    setIvProgress(5);
-    try {
-      const ext = (file.name.split(".").pop() || "mp4").toLowerCase();
-      const path = `${trainee.id}_interview.${ext}`;
-
-      // Indeterminate-but-animated progress while uploading (Supabase JS doesn't expose real progress)
-      let pct = 5;
-      const ticker = setInterval(() => {
-        pct = Math.min(pct + Math.max(1, Math.round((90 - pct) / 12)), 90);
-        setIvProgress(pct);
-      }, 350);
-
-      const { error: upErr } = await supabase.storage
-        .from("interview-videos")
-        .upload(path, file, { cacheControl: "3600", upsert: true, contentType: file.type });
-
-      clearInterval(ticker);
-
-      if (upErr) {
-        setIvProgress(0);
-        alert(`Upload failed: ${upErr.message}`);
-        console.error(upErr);
-        setIvUploading(false);
-        return;
-      }
-      const { data: { publicUrl } } = supabase.storage.from("interview-videos").getPublicUrl(path);
-      const url = `${publicUrl}?t=${Date.now()}`;
-      setInterviewVideoUrl(url);
-      await supabase.from("trainees").update({ interview_video_url: url }).eq("id", trainee.id);
-      setIvProgress(100);
-    } catch (err) { console.error(err); alert("Upload failed"); }
-    setIvUploading(false);
-    setTimeout(() => setIvProgress(0), 800);
+  // ── Interview Google-Drive link helpers ──
+  const extractDriveFileId = (link) => {
+    if (!link) return null;
+    const s = String(link).trim();
+    // Common patterns:
+    //   https://drive.google.com/file/d/FILE_ID/view?usp=...
+    //   https://drive.google.com/file/d/FILE_ID/preview
+    //   https://drive.google.com/open?id=FILE_ID
+    //   https://drive.google.com/uc?id=FILE_ID&...
+    const m1 = s.match(/\/file\/d\/([a-zA-Z0-9_-]{10,})/);
+    if (m1) return m1[1];
+    const m2 = s.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);
+    if (m2) return m2[1];
+    return null;
+  };
+  const toDriveEmbed = (link) => {
+    const id = extractDriveFileId(link);
+    return id ? `https://drive.google.com/file/d/${id}/preview` : null;
   };
 
-  const handleInterviewRemove = async () => {
-    if (!interviewVideoUrl) return;
-    if (!confirm("Remove this interview recording permanently? This cannot be undone.")) return;
-    setIvUploading(true);
+  const handleSaveInterviewLink = async () => {
+    const link = ivDraft.trim();
+    if (!link) { alert("Paste a Google Drive video link first."); return; }
+    setIvSaving(true);
     try {
-      const m = interviewVideoUrl.match(/\/interview-videos\/([^?]+)/);
-      const path = m ? decodeURIComponent(m[1]) : null;
-      if (path) {
-        const { error: rmErr } = await supabase.storage.from("interview-videos").remove([path]);
-        if (rmErr) console.warn("storage remove:", rmErr);
-      }
-      const { error: dbErr } = await supabase.from("trainees").update({ interview_video_url: null }).eq("id", trainee.id);
-      if (dbErr) { alert(`Remove failed: ${dbErr.message}`); setIvUploading(false); return; }
+      const { error } = await supabase.from("trainees").update({ interview_video_url: link }).eq("id", trainee.id);
+      if (error) { alert(`Save failed: ${error.message}`); console.error(error); setIvSaving(false); return; }
+      setInterviewVideoUrl(link);
+      setIvDraft("");
+      setIvEditing(false);
+      onToast?.("success", "Saved to server!");
+    } catch (err) { console.error(err); alert("Save failed"); }
+    setIvSaving(false);
+  };
+
+  const handleClearInterviewLink = async () => {
+    if (!interviewVideoUrl) return;
+    if (!confirm("Remove this interview video link?")) return;
+    setIvSaving(true);
+    try {
+      const { error } = await supabase.from("trainees").update({ interview_video_url: null }).eq("id", trainee.id);
+      if (error) { alert(`Remove failed: ${error.message}`); setIvSaving(false); return; }
       setInterviewVideoUrl("");
+      setIvDraft("");
+      setIvEditing(false);
+      onToast?.("success", "Link removed");
     } catch (err) { console.error(err); alert("Remove failed"); }
-    setIvUploading(false);
+    setIvSaving(false);
   };
 
   const save = () => {
@@ -539,86 +528,152 @@ function TraineeNotesModal({ trainee, onClose, onUpdate, onDelete }) {
                 />
               </div>
 
-              {/* Interview recording — only on interview tab, below remarks */}
-              {activeTab === "interviewPassed" && (
-                <div style={{ marginBottom:16, marginTop:6 }}>
-                  <div style={{ fontWeight:700, fontSize:13, color:"#6366f1", marginBottom:10, display:"flex", alignItems:"center", gap:6 }}>
-                    <span>🎥</span> Interview Recording
-                  </div>
+              {/* Interview recording — Google Drive link, below remarks */}
+              {activeTab === "interviewPassed" && (() => {
+                const embedUrl = toDriveEmbed(interviewVideoUrl);
+                const showInput = !interviewVideoUrl || ivEditing;
+                return (
+                  <div style={{ marginBottom:16, marginTop:6 }}>
+                    <div style={{ fontWeight:700, fontSize:13, color:"#6366f1", marginBottom:10, display:"flex", alignItems:"center", gap:6 }}>
+                      <span>🎥</span> Interview Recording
+                    </div>
 
-                  {interviewVideoUrl ? (
-                    <div style={{
-                      border: "2px solid rgba(99, 102, 241, 0.25)",
-                      borderRadius: 14, overflow: "hidden",
-                      background: "#0f172a",
-                    }}>
-                      <video
-                        key={interviewVideoUrl}
-                        src={interviewVideoUrl}
-                        controls
-                        playsInline
-                        preload="metadata"
-                        style={{ width:"100%", maxHeight:380, display:"block", background:"#000" }}
-                      />
-                      <div style={{ padding:"10px 14px", borderTop:"1px solid rgba(99,102,241,0.2)", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, flexWrap:"wrap", background:"#fff" }}>
-                        <span style={{ fontSize:12, color:"#6366f1", fontWeight:600 }}>🎬 Interview recording uploaded</span>
+                    {showInput && (
+                      <div style={{
+                        border:"1.5px solid #c7d2fe", borderRadius:12,
+                        padding:14, background:"#f8faff", marginBottom: interviewVideoUrl ? 12 : 0,
+                      }}>
+                        <label style={{ display:"block", fontSize:12, fontWeight:700, color:"#475569", marginBottom:6 }}>
+                          🔗 Google Drive Video Link
+                        </label>
                         <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-                          <a
-                            href={interviewVideoUrl} download
+                          <input
+                            type="url"
+                            value={ivDraft}
+                            onChange={e=>setIvDraft(e.target.value)}
+                            placeholder="Paste Google Drive video link here..."
                             style={{
-                              padding:"6px 14px", borderRadius:7, background:"linear-gradient(135deg,#0ea5e9,#06b6d4)",
-                              color:"#fff", fontWeight:700, fontSize:11, textDecoration:"none", fontFamily:"inherit",
+                              flex:1, minWidth:200,
+                              padding:"10px 12px", border:"1.5px solid #e2e8f0", borderRadius:9,
+                              fontSize:13, color:"#1e293b", outline:"none", fontFamily:"inherit",
+                              background:"#fff",
                             }}
-                          >⬇ Download</a>
-                          <label style={{
-                            padding:"6px 14px", borderRadius:7, border:"1.5px solid #c7d2fe",
-                            background:"#eef2ff", color:"#6366f1", fontWeight:700, fontSize:11,
-                            cursor: ivUploading ? "wait" : "pointer", fontFamily:"inherit",
-                          }}>
-                            🔄 Replace Video
-                            <input type="file" accept="video/mp4,video/quicktime,video/webm,video/x-msvideo,video/*" disabled={ivUploading} onChange={handleInterviewUpload} style={{ display:"none" }}/>
-                          </label>
+                          />
                           <button
                             type="button"
-                            onClick={handleInterviewRemove}
-                            disabled={ivUploading}
+                            onClick={handleSaveInterviewLink}
+                            disabled={ivSaving || !ivDraft.trim()}
                             style={{
-                              padding:"6px 14px", borderRadius:7, border:"1.5px solid #fecaca",
-                              background:"#fff1f2", color:"#dc2626", fontWeight:700, fontSize:11,
-                              cursor: ivUploading ? "wait" : "pointer", fontFamily:"inherit",
+                              padding:"10px 18px", borderRadius:9, border:"none",
+                              background: (ivSaving || !ivDraft.trim()) ? "#cbd5e1" : "linear-gradient(135deg,#7C3AED,#6366F1)",
+                              color:"#fff", fontWeight:700, fontSize:13,
+                              cursor: ivSaving ? "wait" : (ivDraft.trim() ? "pointer" : "not-allowed"),
+                              fontFamily:"inherit",
+                              boxShadow: (ivSaving || !ivDraft.trim()) ? "none" : "0 4px 14px rgba(124,58,237,0.3)",
                             }}
-                          >🗑 Remove</button>
+                          >{ivSaving ? "Saving…" : "💾 Save Link"}</button>
+                          {ivEditing && (
+                            <button
+                              type="button"
+                              onClick={()=>{ setIvEditing(false); setIvDraft(""); }}
+                              style={{
+                                padding:"10px 14px", borderRadius:9, border:"1.5px solid #e2e8f0",
+                                background:"#fff", color:"#64748b", fontWeight:700, fontSize:13,
+                                cursor:"pointer", fontFamily:"inherit",
+                              }}
+                            >Cancel</button>
+                          )}
+                        </div>
+                        <div style={{ marginTop:8, fontSize:11, color:"#94a3b8", lineHeight:1.5 }}>
+                          Tip: copy the share link from Google Drive (anyone with the link can view).
                         </div>
                       </div>
-                    </div>
-                  ) : (
-                    <label style={{
-                      display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
-                      padding:"36px 20px", cursor: ivUploading ? "wait" : "pointer", gap:10,
-                      border:"2px dashed #c7d2fe", borderRadius:14,
-                      background: ivUploading ? "#eef2ff" : "#f8faff",
-                    }}>
-                      <div style={{ fontSize:40 }}>{ivUploading ? "⏳" : "🎥"}</div>
-                      <div style={{ fontSize:14, fontWeight:600, color:"#6366f1", textAlign:"center" }}>
-                        {ivUploading ? "Uploading…" : "Upload interview recording (MP4, MOV, etc.)"}
-                      </div>
-                      <div style={{ fontSize:12, color:"#94a3b8", textAlign:"center" }}>Max recommended size: 100 MB</div>
-                      <input type="file" accept="video/mp4,video/quicktime,video/webm,video/x-msvideo,video/*" disabled={ivUploading} onChange={handleInterviewUpload} style={{ display:"none" }}/>
-                    </label>
-                  )}
+                    )}
 
-                  {/* Upload progress bar */}
-                  {ivUploading && (
-                    <div style={{ marginTop:10, height:6, borderRadius:99, background:"#e0e7ff", overflow:"hidden" }}>
+                    {interviewVideoUrl && !ivEditing && (
                       <div style={{
-                        height:"100%", width: `${ivProgress}%`,
-                        background:"linear-gradient(135deg,#7C3AED,#6366F1)",
-                        transition:"width 0.3s ease",
-                      }}/>
-                    </div>
-                  )}
-                </div>
-              )}
+                        border:"2px solid rgba(99, 102, 241, 0.25)",
+                        borderRadius:14, overflow:"hidden",
+                        background:"#0f172a",
+                      }}>
+                        {embedUrl ? (
+                          <iframe
+                            key={embedUrl}
+                            src={embedUrl}
+                            title="Interview recording"
+                            allow="autoplay; fullscreen"
+                            allowFullScreen
+                            style={{ width:"100%", height:280, border:"none", display:"block", background:"#000" }}
+                          />
+                        ) : (
+                          <div style={{ padding:"36px 20px", textAlign:"center", color:"#fff" }}>
+                            <div style={{ fontSize:40, marginBottom:8 }}>🎥</div>
+                            <div style={{ fontSize:13, opacity:0.85 }}>This link can't be embedded — open it on Drive instead.</div>
+                          </div>
+                        )}
+
+                        <div style={{ padding:"10px 14px", borderTop:"1px solid rgba(99,102,241,0.2)", background:"#fff" }}>
+                          {/* Saved link preview */}
+                          <a
+                            href={interviewVideoUrl}
+                            target="_blank" rel="noopener noreferrer"
+                            title={interviewVideoUrl}
+                            style={{
+                              display:"block", fontSize:11, color:"#6366f1", fontWeight:600,
+                              overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+                              marginBottom:10, textDecoration:"underline",
+                            }}
+                          >🔗 {interviewVideoUrl}</a>
+
+                          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                            <a
+                              href={interviewVideoUrl}
+                              target="_blank" rel="noopener noreferrer"
+                              style={{
+                                flex:1, minWidth:160,
+                                padding:"11px 16px", borderRadius:10,
+                                background:"linear-gradient(135deg,#7C3AED,#6366F1)",
+                                color:"#fff", fontWeight:800, fontSize:13,
+                                textDecoration:"none", fontFamily:"inherit",
+                                display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+                                boxShadow:"0 4px 14px rgba(124,58,237,0.3)",
+                              }}
+                            >▶ Open Interview Video</a>
+                            <button
+                              type="button"
+                              onClick={()=>{ setIvDraft(interviewVideoUrl); setIvEditing(true); }}
+                              disabled={ivSaving}
+                              style={{
+                                padding:"11px 14px", borderRadius:10, border:"1.5px solid #c7d2fe",
+                                background:"#eef2ff", color:"#6366f1", fontWeight:700, fontSize:12,
+                                cursor: ivSaving ? "wait" : "pointer", fontFamily:"inherit",
+                              }}
+                            >✏️ Edit</button>
+                            <button
+                              type="button"
+                              onClick={handleClearInterviewLink}
+                              disabled={ivSaving}
+                              style={{
+                                padding:"11px 14px", borderRadius:10, border:"1.5px solid #fecaca",
+                                background:"#fff1f2", color:"#dc2626", fontWeight:700, fontSize:12,
+                                cursor: ivSaving ? "wait" : "pointer", fontFamily:"inherit",
+                              }}
+                            >🗑 Clear</button>
+                          </div>
+                          {!embedUrl && (
+                            <div style={{ marginTop:8, fontSize:11, color:"#dc2626" }}>
+                              ⚠ Couldn't extract a Drive file ID. Make sure the link looks like
+                              <code style={{ background:"#fee2e2", padding:"1px 5px", borderRadius:4, marginLeft:4 }}>
+                                /file/d/FILE_ID/view
+                              </code>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Certificate upload — only on certificate tab */}
               {activeTab === "certificate" && (
@@ -725,6 +780,9 @@ function TraineeNotesModal({ trainee, onClose, onUpdate, onDelete }) {
                         <div style={{ marginTop:4, fontSize:10 }}>
                           {done ? <span style={{ color:"#22c55e" }}>✓ Done</span> : <span style={{ color:"#d1d5db" }}>—</span>}
                           {hasRemark && <span style={{ marginLeft:4, color: p.color }}>📝</span>}
+                          {p.key === "interviewPassed" && interviewVideoUrl && (
+                            <span style={{ marginLeft:4, color:"#6366f1", fontWeight:700 }}>✓ Video</span>
+                          )}
                         </div>
                       </div>
                     );
@@ -3219,6 +3277,7 @@ function TraineePortal({ profile, onLogout, darkMode, onToggleDark }) {
               setNotesModal(null);
             }}
             onDelete={canDelete ? (id)=>{ deleteTrainee(id); setNotesModal(null); } : null}
+            onToast={showToast}
           />
         );
       })()}
