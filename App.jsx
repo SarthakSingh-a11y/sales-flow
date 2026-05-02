@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 import * as XLSX from "xlsx-js-style";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
@@ -1450,6 +1452,436 @@ function AdminPanel({ currentUserId, onClose, showToast }) {
   );
 }
 
+/* ═══════════════════════════════ ANALYTICS REPORT ═══════════════════════════════ */
+function AnalyticsModal({ trainees, onClose, showToast }) {
+  const today = new Date();
+  const fmt = (d) => d.toISOString().slice(0, 10);
+  const [range, setRange]   = useState("30");           // "7" | "30" | "custom"
+  const [from,  setFrom]    = useState(fmt(new Date(today.getTime() - 30*86400000)));
+  const [to,    setTo]      = useState(fmt(today));
+  const [busy,  setBusy]    = useState(false);
+
+  const computeWindow = () => {
+    if (range === "7")  return { start: new Date(today.getTime() - 7*86400000),  end: new Date(today.getTime() + 86400000) };
+    if (range === "30") return { start: new Date(today.getTime() - 30*86400000), end: new Date(today.getTime() + 86400000) };
+    return { start: new Date(from + "T00:00:00"), end: new Date(to + "T23:59:59") };
+  };
+
+  const generate = async () => {
+    setBusy(true);
+    try {
+      const { start, end } = computeWindow();
+      generatePdfReport(trainees, start, end);
+      showToast?.("success", "Report downloaded");
+      onClose();
+    } catch (e) {
+      console.error(e);
+      showToast?.("error", `Report failed: ${e.message || e}`);
+    }
+    setBusy(false);
+  };
+
+  return (
+    <div className="tf-modal-root" style={{ position:"fixed",inset:0,background:"#0009",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }} onClick={onClose}>
+      <div className="tf-modal-card" style={{ width:480,maxWidth:"95vw",background:"#fff",borderRadius:20,padding:32,fontFamily:"'DM Sans',sans-serif",boxShadow:"0 32px 80px #0004" }} onClick={e=>e.stopPropagation()}>
+        <div style={{ textAlign:"center", marginBottom:18 }}>
+          <div style={{ fontSize:42, marginBottom:6 }}>📈</div>
+          <h2 style={{ margin:0, fontFamily:"'Sora',sans-serif", fontWeight:800, fontSize:20, color:"#1e293b" }}>Analytics Report</h2>
+          <p style={{ margin:"6px 0 0", fontSize:13, color:"#64748b", lineHeight:1.5 }}>Pick a time period and download a polished PDF.</p>
+        </div>
+
+        <div style={{ display:"flex", gap:8, marginBottom:14, flexWrap:"wrap" }}>
+          {[
+            { key:"7",      label:"Last 7 Days"  },
+            { key:"30",     label:"Last 30 Days" },
+            { key:"custom", label:"Custom"       },
+          ].map(p => (
+            <button key={p.key} onClick={()=>setRange(p.key)} style={{
+              flex:1, minWidth:110,
+              padding:"11px 10px", borderRadius:11, fontWeight:700, fontSize:13,
+              border: range===p.key ? "2px solid #7C3AED" : "1.5px solid #e2e8f0",
+              background: range===p.key ? "linear-gradient(135deg,#7C3AED,#6366F1)" : "#fff",
+              color: range===p.key ? "#fff" : "#64748b",
+              cursor:"pointer", fontFamily:"inherit", transition:"all 0.15s",
+              boxShadow: range===p.key ? "0 4px 14px rgba(124,58,237,0.3)" : "none",
+            }}>{p.label}</button>
+          ))}
+        </div>
+
+        {range === "custom" && (
+          <div style={{ display:"flex", gap:10, marginBottom:14 }}>
+            <div style={{ flex:1 }}>
+              <label style={{ display:"block", fontSize:12, fontWeight:600, color:"#475569", marginBottom:5 }}>From</label>
+              <input type="date" value={from} max={to} onChange={e=>setFrom(e.target.value)} style={{ width:"100%", padding:"10px 12px", border:"1.5px solid #e2e8f0", borderRadius:9, fontSize:13, fontFamily:"inherit", outline:"none", boxSizing:"border-box" }}/>
+            </div>
+            <div style={{ flex:1 }}>
+              <label style={{ display:"block", fontSize:12, fontWeight:600, color:"#475569", marginBottom:5 }}>To</label>
+              <input type="date" value={to} min={from} onChange={e=>setTo(e.target.value)} style={{ width:"100%", padding:"10px 12px", border:"1.5px solid #e2e8f0", borderRadius:9, fontSize:13, fontFamily:"inherit", outline:"none", boxSizing:"border-box" }}/>
+            </div>
+          </div>
+        )}
+
+        <div style={{ background:"#f8faff", border:"1.5px solid #e0e7ff", borderRadius:11, padding:"12px 14px", marginBottom:18, fontSize:12, color:"#4338ca", lineHeight:1.5 }}>
+          📋 The report covers all trainees enrolled in the selected period and includes onboarder performance, stage drop-offs, and breakdowns by outcome.
+        </div>
+
+        <div style={{ display:"flex", gap:10 }}>
+          <button onClick={onClose} disabled={busy} style={{ flex:1, padding:"12px", borderRadius:11, border:"1.5px solid #e2e8f0", background:"#fff", color:"#64748b", fontWeight:700, fontSize:13, cursor: busy ? "not-allowed" : "pointer", fontFamily:"inherit" }}>Cancel</button>
+          <button onClick={generate} disabled={busy} style={{
+            flex:2, padding:"12px", borderRadius:11, border:"none",
+            background: busy ? "#cbd5e1" : "linear-gradient(135deg,#7C3AED,#6366F1)",
+            color:"#fff", fontWeight:800, fontSize:14,
+            cursor: busy ? "wait" : "pointer", fontFamily:"inherit",
+            boxShadow: busy ? "none" : "0 6px 20px rgba(124,58,237,0.35)",
+          }}>{busy ? "Generating…" : "📄 Generate Report"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── PDF generator — pure helper, no React deps ──
+function generatePdfReport(allTrainees, startDate, endDate) {
+  const PURPLE = [124, 58, 237];
+  const SLATE_DARK  = [30, 41, 59];
+  const SLATE_MID   = [71, 85, 105];
+  const SLATE_LIGHT = [148, 163, 184];
+
+  // Filter window — by enrollDate (ISO yyyy-mm-dd)
+  const inWindow = (t) => {
+    const raw = t.enrollDate || t.enroll_date;
+    if (!raw) return false;
+    const d = new Date(raw);
+    return d >= startDate && d <= endDate;
+  };
+
+  const fmtDate = (d) => d.toLocaleDateString("en-IN", { day:"numeric", month:"short", year:"numeric" });
+  const fmtIso  = (d) => d.toISOString().slice(0,10);
+  const trainees = allTrainees.filter(inWindow);
+
+  // Outcome buckets
+  const selected     = trainees.filter(t => t.status === "Selected");
+  const notSelected  = trainees.filter(t => t.status === "Not Selected");
+  const leaved       = trainees.filter(t => t.status === "Leaved");
+  const pending      = trainees.filter(t => t.status === "Pending");
+  const active       = trainees.filter(t => !["Selected","Not Selected","Leaved","Pending"].includes(t.status));
+
+  const total = trainees.length;
+  const selectionRate = total ? ((selected.length / total) * 100).toFixed(1) : "0.0";
+  const dropoutRate   = total ? ((leaved.length   / total) * 100).toFixed(1) : "0.0";
+
+  // ── Init PDF (A4 portrait) ──
+  const doc = new jsPDF({ unit:"mm", format:"a4" });
+  const pageW = doc.internal.pageSize.getWidth();   // 210
+  const pageH = doc.internal.pageSize.getHeight();  // 297
+  const margin = 14;
+
+  let y = margin;
+
+  // ─── COVER / HEADER ──────────────────────────────────────────────
+  // Purple band
+  doc.setFillColor(...PURPLE);
+  doc.rect(0, 0, pageW, 32, "F");
+  // Brand text
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(20);
+  doc.text("TrainFlow Pro", margin, 14);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.text("Sales Training Portal", margin, 21);
+
+  // Top-right meta
+  doc.setFontSize(9);
+  const generatedOn = `Generated: ${fmtDate(new Date())}`;
+  doc.text(generatedOn, pageW - margin, 14, { align:"right" });
+
+  y = 46;
+
+  // Report title
+  doc.setTextColor(...SLATE_DARK);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(20);
+  doc.text("Training Analytics Report", margin, y);
+
+  y += 7;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  doc.setTextColor(...SLATE_MID);
+  doc.text(`Period: ${fmtDate(startDate)}  —  ${fmtDate(endDate)}`, margin, y);
+
+  y += 4;
+  doc.setDrawColor(...PURPLE);
+  doc.setLineWidth(0.6);
+  doc.line(margin, y, pageW - margin, y);
+
+  y += 8;
+
+  // ─── 2. OVERALL SUMMARY ──────────────────────────────────────────
+  sectionTitle(doc, "1. Overall Summary", margin, y, PURPLE);
+  y += 7;
+
+  const summaryStats = [
+    ["Total Enrolled (in period)", String(total)],
+    ["Active / In Progress",       String(active.length)],
+    ["Pending Decision",           String(pending.length)],
+    ["Selected",                   String(selected.length)],
+    ["Not Selected",               String(notSelected.length)],
+    ["Leaved",                     String(leaved.length)],
+    ["Selection Rate",             `${selectionRate}%`],
+    ["Dropout Rate",               `${dropoutRate}%`],
+  ];
+
+  autoTable(doc, {
+    startY: y,
+    body: summaryStats,
+    theme: "grid",
+    styles: { fontSize: 10, cellPadding: 3, textColor: SLATE_DARK },
+    columnStyles: {
+      0: { fontStyle:"bold", fillColor:[245, 247, 255], cellWidth: 70 },
+      1: { halign:"right",  textColor: PURPLE, fontStyle:"bold" },
+    },
+    margin: { left: margin, right: margin },
+  });
+  y = doc.lastAutoTable.finalY + 10;
+
+  // ─── 3. ONBOARDER PERFORMANCE ────────────────────────────────────
+  ensureSpace(doc, 60);
+  y = doc.lastAutoTable ? doc.lastAutoTable.finalY + 10 : y;
+  sectionTitle(doc, "2. Onboarder Performance", margin, y, PURPLE);
+  y += 7;
+
+  const onboarders = ["Sarthak", "Archita", "Kritika"];
+  const obRows = onboarders.map(name => {
+    const own = trainees.filter(t => t.onboarder === name);
+    const sel = own.filter(t => t.status === "Selected").length;
+    const ns  = own.filter(t => t.status === "Not Selected").length;
+    const lv  = own.filter(t => t.status === "Leaved").length;
+    const ac  = own.length - sel - ns - lv - own.filter(t => t.status === "Pending").length;
+    const rate = own.length ? (sel / own.length) * 100 : 0;
+    return { name, total: own.length, sel, ns, lv, ac: Math.max(ac, 0), rate };
+  });
+  // Mark top performer
+  const top = [...obRows].filter(r => r.total > 0).sort((a,b) => b.rate - a.rate)[0];
+  const topName = top?.name;
+
+  autoTable(doc, {
+    startY: y,
+    head: [["Onboarder", "Total", "Selected", "Not Sel.", "Leaved", "Active", "Sel. Rate %", ""]],
+    body: obRows.map(r => ([
+      r.name + (r.name === topName && r.total > 0 ? " ⭐" : ""),
+      r.total, r.sel, r.ns, r.lv, r.ac, `${r.rate.toFixed(1)}%`,
+      r.name === topName && r.total > 0 ? "Top Performer" : "",
+    ])),
+    theme: "striped",
+    headStyles: { fillColor: PURPLE, textColor: 255, fontStyle:"bold", fontSize: 10 },
+    bodyStyles: { fontSize: 9, textColor: SLATE_DARK },
+    alternateRowStyles: { fillColor: [248, 250, 255] },
+    columnStyles: { 7: { textColor: PURPLE, fontStyle:"bold" } },
+    margin: { left: margin, right: margin },
+  });
+  y = doc.lastAutoTable.finalY + 10;
+
+  // ─── 4. STAGE COMPLETION ANALYSIS ────────────────────────────────
+  ensureSpace(doc, 80);
+  y = doc.lastAutoTable.finalY + 10;
+  sectionTitle(doc, "3. Stage Completion Analysis", margin, y, PURPLE);
+  y += 7;
+
+  const phaseList = [
+    { key:"shopifyStore",    label:"Shopify"     },
+    { key:"antiGravity",     label:"A-Gravity"   },
+    { key:"videosWatched",   label:"Videos"      },
+    { key:"certificate",     label:"Certificate" },
+    { key:"interviewPassed", label:"Interview"   },
+    { key:"chatPart1",       label:"Chat P1"     },
+    { key:"chatPart2",       label:"Chat P2"     },
+    { key:"shopifyTheme",    label:"S. Theme"    },
+    { key:"brandedStore",    label:"Branded"     },
+    { key:"portfolioReview", label:"Portfolio"   },
+    { key:"finalTest",       label:"Final Test"  },
+  ];
+  const phaseRows = phaseList.map(p => {
+    const done = trainees.filter(t => t.phases?.[p.key]).length;
+    const rate = total ? (done / total) * 100 : 0;
+    return [p.label, done, total - done, `${rate.toFixed(1)}%`];
+  });
+
+  autoTable(doc, {
+    startY: y,
+    head: [["Stage", "Completed", "Not Done", "Completion Rate"]],
+    body: phaseRows,
+    theme: "striped",
+    headStyles: { fillColor: PURPLE, textColor: 255, fontStyle:"bold", fontSize: 10 },
+    bodyStyles: { fontSize: 10, textColor: SLATE_DARK },
+    alternateRowStyles: { fillColor: [248, 250, 255] },
+    columnStyles: { 3: { halign:"right", fontStyle:"bold", textColor: PURPLE } },
+    margin: { left: margin, right: margin },
+  });
+  y = doc.lastAutoTable.finalY + 4;
+
+  // Drop-off insight
+  if (total > 0) {
+    const ranked = phaseList.map((p, idx) => ({
+      label: p.label,
+      done: trainees.filter(t => t.phases?.[p.key]).length,
+      idx,
+    })).sort((a, b) => a.done - b.done);
+    const lowest = ranked[0];
+    if (lowest) {
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(10);
+      doc.setTextColor(220, 38, 38);
+      doc.text(`⚠ Biggest drop-off: "${lowest.label}" — only ${lowest.done}/${total} (${((lowest.done/total)*100).toFixed(1)}%) completed.`, margin, y + 5);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(...SLATE_DARK);
+      y += 8;
+    }
+  }
+  y += 6;
+
+  // ─── 5. SELECTED LIST ────────────────────────────────────────────
+  ensureSpace(doc, 50);
+  y = (doc.lastAutoTable.finalY || y) + 8;
+  sectionTitle(doc, `4. Selected Trainees (${selected.length})`, margin, y, [13, 148, 136]);
+  y += 7;
+
+  if (selected.length === 0) emptyNote(doc, margin, y, "No trainees were selected in this period.");
+  else {
+    autoTable(doc, {
+      startY: y,
+      head: [["Name", "Contact", "Onboarder", "Days to Complete", "Enrolled"]],
+      body: selected.map(t => {
+        const enrolled = t.enrollDate || t.enroll_date || "";
+        const enrolledDate = enrolled ? new Date(enrolled) : null;
+        const days = enrolledDate ? Math.max(0, Math.round((Date.now() - enrolledDate.getTime()) / 86400000)) : "—";
+        return [t.name || "", t.contact || "", t.onboarder || "—", String(days), enrolled ? fmtDate(enrolledDate) : "—"];
+      }),
+      theme: "striped",
+      headStyles: { fillColor: [13, 148, 136], textColor: 255, fontStyle:"bold", fontSize: 10 },
+      bodyStyles: { fontSize: 9, textColor: SLATE_DARK },
+      alternateRowStyles: { fillColor: [240, 253, 250] },
+      margin: { left: margin, right: margin },
+    });
+    y = doc.lastAutoTable.finalY;
+  }
+  y += 8;
+
+  // ─── 6. NOT SELECTED LIST ────────────────────────────────────────
+  ensureSpace(doc, 50);
+  y = (doc.lastAutoTable.finalY || y) + 8;
+  sectionTitle(doc, `5. Not Selected Trainees (${notSelected.length})`, margin, y, [217, 119, 6]);
+  y += 7;
+
+  const lastStage = (t) => {
+    let last = "—";
+    for (const p of phaseList) if (t.phases?.[p.key]) last = p.label;
+    return last;
+  };
+
+  if (notSelected.length === 0) emptyNote(doc, margin, y, "No trainees were marked Not Selected in this period.");
+  else {
+    autoTable(doc, {
+      startY: y,
+      head: [["Name", "Contact", "Onboarder", "Last Stage Reached"]],
+      body: notSelected.map(t => [t.name || "", t.contact || "", t.onboarder || "—", lastStage(t)]),
+      theme: "striped",
+      headStyles: { fillColor: [217, 119, 6], textColor: 255, fontStyle:"bold", fontSize: 10 },
+      bodyStyles: { fontSize: 9, textColor: SLATE_DARK },
+      alternateRowStyles: { fillColor: [255, 251, 235] },
+      margin: { left: margin, right: margin },
+    });
+    y = doc.lastAutoTable.finalY;
+  }
+  y += 8;
+
+  // ─── 7. LEAVED LIST ──────────────────────────────────────────────
+  ensureSpace(doc, 50);
+  y = (doc.lastAutoTable.finalY || y) + 8;
+  sectionTitle(doc, `6. Leaved Trainees (${leaved.length})`, margin, y, [190, 18, 60]);
+  y += 7;
+
+  if (leaved.length === 0) emptyNote(doc, margin, y, "No trainees left the program in this period.");
+  else {
+    autoTable(doc, {
+      startY: y,
+      head: [["Name", "Contact", "Onboarder", "Last Stage Reached"]],
+      body: leaved.map(t => [t.name || "", t.contact || "", t.onboarder || "—", lastStage(t)]),
+      theme: "striped",
+      headStyles: { fillColor: [190, 18, 60], textColor: 255, fontStyle:"bold", fontSize: 10 },
+      bodyStyles: { fontSize: 9, textColor: SLATE_DARK },
+      alternateRowStyles: { fillColor: [255, 241, 242] },
+      margin: { left: margin, right: margin },
+    });
+    y = doc.lastAutoTable.finalY;
+  }
+  y += 8;
+
+  // ─── 8. ACTIVE TRAINEES SNAPSHOT ─────────────────────────────────
+  ensureSpace(doc, 50);
+  y = (doc.lastAutoTable.finalY || y) + 8;
+  sectionTitle(doc, `7. Active Trainees Snapshot (${active.length + pending.length})`, margin, y, PURPLE);
+  y += 7;
+
+  const allActive = [...active, ...pending];
+  if (allActive.length === 0) emptyNote(doc, margin, y, "No active trainees in this period.");
+  else {
+    autoTable(doc, {
+      startY: y,
+      head: [["Name", "Onboarder", "Current Phase", "Progress", "Days Since Enrolled"]],
+      body: allActive.map(t => {
+        const last = lastStage(t);
+        const done = phaseList.filter(p => t.phases?.[p.key]).length;
+        const enrolled = t.enrollDate || t.enroll_date;
+        const days = enrolled ? Math.max(0, Math.round((Date.now() - new Date(enrolled).getTime()) / 86400000)) : "—";
+        return [t.name || "", t.onboarder || "—", last, `${done}/11`, String(days)];
+      }),
+      theme: "striped",
+      headStyles: { fillColor: PURPLE, textColor: 255, fontStyle:"bold", fontSize: 10 },
+      bodyStyles: { fontSize: 9, textColor: SLATE_DARK },
+      alternateRowStyles: { fillColor: [248, 250, 255] },
+      margin: { left: margin, right: margin },
+    });
+  }
+
+  // ─── Page numbering footer ───────────────────────────────────────
+  const pageCount = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(...SLATE_LIGHT);
+    doc.text(`Page ${i} of ${pageCount}`, pageW - margin, pageH - 8, { align:"right" });
+    doc.text("TrainFlow Pro · Confidential", margin, pageH - 8);
+  }
+
+  doc.save(`TrainFlow-Analytics-${fmtIso(startDate)}-to-${fmtIso(endDate)}.pdf`);
+
+  // Helpers (defined after the function scope, hoisted lambdas)
+  function sectionTitle(d, text, x, y, rgb) {
+    d.setDrawColor(...rgb);
+    d.setFillColor(...rgb);
+    d.rect(x, y - 4.5, 3, 5.5, "F");
+    d.setFont("helvetica", "bold");
+    d.setFontSize(13);
+    d.setTextColor(...rgb);
+    d.text(text, x + 5, y);
+    d.setTextColor(...SLATE_DARK);
+  }
+  function emptyNote(d, x, y, text) {
+    d.setFont("helvetica", "italic");
+    d.setFontSize(10);
+    d.setTextColor(...SLATE_LIGHT);
+    d.text(text, x, y);
+    d.setFont("helvetica", "normal");
+    d.setTextColor(...SLATE_DARK);
+  }
+  function ensureSpace(d, needed) {
+    const cy = d.lastAutoTable ? d.lastAutoTable.finalY : 50;
+    if (cy + needed > pageH - 20) d.addPage();
+  }
+}
+
 /* ═══════════════════════════════ MAIN PORTAL ═══════════════════════════════ */
 function TraineePortal({ profile, onLogout, darkMode, onToggleDark }) {
   const isAdmin = profile?.role === "admin";
@@ -1475,6 +1907,7 @@ function TraineePortal({ profile, onLogout, darkMode, onToggleDark }) {
   const [showAdminPanel,   setShowAdminPanel]   = useState(false); // admin-only user management modal
   const [showMobileMenu,   setShowMobileMenu]   = useState(false); // mobile drawer
   const [showInstallSheet, setShowInstallSheet] = useState(false); // install-app modal
+  const [showAnalytics,    setShowAnalytics]    = useState(false); // admin-only analytics modal
   const installApp = useInstallApp();
   const [toast,            setToast]            = useState(null); // { type:"success"|"error", msg }
   const pendingSaves = useRef(new Set()); // IDs currently mid-save — blocks real-time bounce-back
@@ -2094,6 +2527,9 @@ function TraineePortal({ profile, onLogout, darkMode, onToggleDark }) {
             <>
               <button onClick={exportToExcel} title="Export all trainees to Excel (Admin only)" style={{ display:"flex",alignItems:"center",gap:6,background:"linear-gradient(135deg,#16a34a,#22c55e)",color:"#fff",border:"none",borderRadius:10,padding:"9px 16px",fontWeight:700,fontSize:13,cursor:"pointer",boxShadow:"0 4px 14px #16a34a33",fontFamily:"inherit" }}>
                 📊<span className="tf-btn-label"> Export Excel</span>
+              </button>
+              <button onClick={()=>setShowAnalytics(true)} title="Analytics Report (Admin only)" style={{ display:"flex",alignItems:"center",gap:6,background:"linear-gradient(135deg,#7C3AED,#6366F1)",color:"#fff",border:"none",borderRadius:10,padding:"9px 16px",fontWeight:700,fontSize:13,cursor:"pointer",boxShadow:"0 4px 14px rgba(124,58,237,0.3)",fontFamily:"inherit" }}>
+                📈<span className="tf-btn-label"> Analytics</span>
               </button>
               <button onClick={()=>setShowAdminPanel(true)} title="User Management (Admin only)" style={{ display:"flex",alignItems:"center",gap:6,background:"#fff",color:"#6366f1",border:"1.5px solid #c7d2fe",borderRadius:10,padding:"9px 16px",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit" }}>
                 👥<span className="tf-btn-label"> Users</span>
@@ -2836,6 +3272,14 @@ function TraineePortal({ profile, onLogout, darkMode, onToggleDark }) {
         />
       )}
 
+      {showAnalytics && isAdmin && (
+        <AnalyticsModal
+          trainees={trainees}
+          onClose={()=>setShowAnalytics(false)}
+          showToast={showToast}
+        />
+      )}
+
       {showInstallSheet && (
         <InstallSheet
           onClose={()=>setShowInstallSheet(false)}
@@ -2896,6 +3340,10 @@ function TraineePortal({ profile, onLogout, darkMode, onToggleDark }) {
                 <button className="tf-drawer-item" onClick={()=>{ exportToExcel(); setShowMobileMenu(false); }}>
                   <span className="tf-drawer-icon" style={{ background:"linear-gradient(135deg,#16a34a,#22c55e)", color:"#fff" }}>📊</span>
                   <span>Export Excel</span>
+                </button>
+                <button className="tf-drawer-item" onClick={()=>{ setShowAnalytics(true); setShowMobileMenu(false); }}>
+                  <span className="tf-drawer-icon" style={{ background:"linear-gradient(135deg,#7C3AED,#6366F1)", color:"#fff" }}>📈</span>
+                  <span>Analytics</span>
                 </button>
                 <button className="tf-drawer-item" onClick={()=>{ setShowAdminPanel(true); setShowMobileMenu(false); }}>
                   <span className="tf-drawer-icon" style={{ background:"#eef2ff", color:"#6366f1" }}>👥</span>
