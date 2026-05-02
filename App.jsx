@@ -143,6 +143,9 @@ function TraineeNotesModal({ trainee, onClose, onUpdate, onDelete }) {
   const [certText, setCertText]   = useState(trainee.certificateText || "");
   const [cvUrl, setCvUrl]         = useState(trainee.cvUrl || trainee.cv_url || "");
   const [cvUploading, setCvUploading] = useState(false);
+  const [interviewVideoUrl, setInterviewVideoUrl] = useState(trainee.interviewVideoUrl || trainee.interview_video_url || "");
+  const [ivUploading, setIvUploading]             = useState(false);
+  const [ivProgress, setIvProgress]               = useState(0); // 0–100
 
   const handleCertUpload = (e) => {
     const file = e.target.files?.[0];
@@ -196,8 +199,70 @@ function TraineeNotesModal({ trainee, onClose, onUpdate, onDelete }) {
     setCvUploading(false);
   };
 
+  // ── Interview video upload ──
+  const handleInterviewUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("video/") && !/\.(mp4|mov|webm|avi|mkv)$/i.test(file.name)) {
+      alert("Please choose a video file (MP4, MOV, WEBM, AVI).");
+      return;
+    }
+    setIvUploading(true);
+    setIvProgress(5);
+    try {
+      const ext = (file.name.split(".").pop() || "mp4").toLowerCase();
+      const path = `${trainee.id}_interview.${ext}`;
+
+      // Indeterminate-but-animated progress while uploading (Supabase JS doesn't expose real progress)
+      let pct = 5;
+      const ticker = setInterval(() => {
+        pct = Math.min(pct + Math.max(1, Math.round((90 - pct) / 12)), 90);
+        setIvProgress(pct);
+      }, 350);
+
+      const { error: upErr } = await supabase.storage
+        .from("interview-videos")
+        .upload(path, file, { cacheControl: "3600", upsert: true, contentType: file.type });
+
+      clearInterval(ticker);
+
+      if (upErr) {
+        setIvProgress(0);
+        alert(`Upload failed: ${upErr.message}`);
+        console.error(upErr);
+        setIvUploading(false);
+        return;
+      }
+      const { data: { publicUrl } } = supabase.storage.from("interview-videos").getPublicUrl(path);
+      const url = `${publicUrl}?t=${Date.now()}`;
+      setInterviewVideoUrl(url);
+      await supabase.from("trainees").update({ interview_video_url: url }).eq("id", trainee.id);
+      setIvProgress(100);
+    } catch (err) { console.error(err); alert("Upload failed"); }
+    setIvUploading(false);
+    setTimeout(() => setIvProgress(0), 800);
+  };
+
+  const handleInterviewRemove = async () => {
+    if (!interviewVideoUrl) return;
+    if (!confirm("Remove this interview recording permanently? This cannot be undone.")) return;
+    setIvUploading(true);
+    try {
+      const m = interviewVideoUrl.match(/\/interview-videos\/([^?]+)/);
+      const path = m ? decodeURIComponent(m[1]) : null;
+      if (path) {
+        const { error: rmErr } = await supabase.storage.from("interview-videos").remove([path]);
+        if (rmErr) console.warn("storage remove:", rmErr);
+      }
+      const { error: dbErr } = await supabase.from("trainees").update({ interview_video_url: null }).eq("id", trainee.id);
+      if (dbErr) { alert(`Remove failed: ${dbErr.message}`); setIvUploading(false); return; }
+      setInterviewVideoUrl("");
+    } catch (err) { console.error(err); alert("Remove failed"); }
+    setIvUploading(false);
+  };
+
   const save = () => {
-    onUpdate(trainee.id, { phases, phaseNotes, notes: generalNotes, status, certificateImage: certImage, certificateText: certText, cvUrl });
+    onUpdate(trainee.id, { phases, phaseNotes, notes: generalNotes, status, certificateImage: certImage, certificateText: certText, cvUrl, interviewVideoUrl });
     onClose();
   };
 
@@ -471,6 +536,87 @@ function TraineeNotesModal({ trainee, onClose, onUpdate, onDelete }) {
                   }}
                 />
               </div>
+
+              {/* Interview recording — only on interview tab, below remarks */}
+              {activeTab === "interviewPassed" && (
+                <div style={{ marginBottom:16, marginTop:6 }}>
+                  <div style={{ fontWeight:700, fontSize:13, color:"#6366f1", marginBottom:10, display:"flex", alignItems:"center", gap:6 }}>
+                    <span>🎥</span> Interview Recording
+                  </div>
+
+                  {interviewVideoUrl ? (
+                    <div style={{
+                      border: "2px solid rgba(99, 102, 241, 0.25)",
+                      borderRadius: 14, overflow: "hidden",
+                      background: "#0f172a",
+                    }}>
+                      <video
+                        key={interviewVideoUrl}
+                        src={interviewVideoUrl}
+                        controls
+                        playsInline
+                        preload="metadata"
+                        style={{ width:"100%", maxHeight:380, display:"block", background:"#000" }}
+                      />
+                      <div style={{ padding:"10px 14px", borderTop:"1px solid rgba(99,102,241,0.2)", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, flexWrap:"wrap", background:"#fff" }}>
+                        <span style={{ fontSize:12, color:"#6366f1", fontWeight:600 }}>🎬 Interview recording uploaded</span>
+                        <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                          <a
+                            href={interviewVideoUrl} download
+                            style={{
+                              padding:"6px 14px", borderRadius:7, background:"linear-gradient(135deg,#0ea5e9,#06b6d4)",
+                              color:"#fff", fontWeight:700, fontSize:11, textDecoration:"none", fontFamily:"inherit",
+                            }}
+                          >⬇ Download</a>
+                          <label style={{
+                            padding:"6px 14px", borderRadius:7, border:"1.5px solid #c7d2fe",
+                            background:"#eef2ff", color:"#6366f1", fontWeight:700, fontSize:11,
+                            cursor: ivUploading ? "wait" : "pointer", fontFamily:"inherit",
+                          }}>
+                            🔄 Replace Video
+                            <input type="file" accept="video/mp4,video/quicktime,video/webm,video/x-msvideo,video/*" disabled={ivUploading} onChange={handleInterviewUpload} style={{ display:"none" }}/>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={handleInterviewRemove}
+                            disabled={ivUploading}
+                            style={{
+                              padding:"6px 14px", borderRadius:7, border:"1.5px solid #fecaca",
+                              background:"#fff1f2", color:"#dc2626", fontWeight:700, fontSize:11,
+                              cursor: ivUploading ? "wait" : "pointer", fontFamily:"inherit",
+                            }}
+                          >🗑 Remove</button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <label style={{
+                      display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+                      padding:"36px 20px", cursor: ivUploading ? "wait" : "pointer", gap:10,
+                      border:"2px dashed #c7d2fe", borderRadius:14,
+                      background: ivUploading ? "#eef2ff" : "#f8faff",
+                    }}>
+                      <div style={{ fontSize:40 }}>{ivUploading ? "⏳" : "🎥"}</div>
+                      <div style={{ fontSize:14, fontWeight:600, color:"#6366f1", textAlign:"center" }}>
+                        {ivUploading ? "Uploading…" : "Upload interview recording (MP4, MOV, etc.)"}
+                      </div>
+                      <div style={{ fontSize:12, color:"#94a3b8", textAlign:"center" }}>Max recommended size: 100 MB</div>
+                      <input type="file" accept="video/mp4,video/quicktime,video/webm,video/x-msvideo,video/*" disabled={ivUploading} onChange={handleInterviewUpload} style={{ display:"none" }}/>
+                    </label>
+                  )}
+
+                  {/* Upload progress bar */}
+                  {ivUploading && (
+                    <div style={{ marginTop:10, height:6, borderRadius:99, background:"#e0e7ff", overflow:"hidden" }}>
+                      <div style={{
+                        height:"100%", width: `${ivProgress}%`,
+                        background:"linear-gradient(135deg,#7C3AED,#6366F1)",
+                        transition:"width 0.3s ease",
+                      }}/>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Certificate upload — only on certificate tab */}
               {activeTab === "certificate" && (
@@ -1379,6 +1525,7 @@ function TraineePortal({ profile, onLogout, darkMode, onToggleDark }) {
       leavedDate:       t.leaved_date   || "",
       onboarder:        t.onboarder || "",
       cvUrl:            t.cv_url || "",
+      interviewVideoUrl: t.interview_video_url || "",
     };
   };
 
@@ -1435,6 +1582,7 @@ function TraineePortal({ profile, onLogout, darkMode, onToggleDark }) {
       leaved_date:       t.leavedDate   || "",
       onboarder:         t.onboarder || "",
       cv_url:            t.cvUrl || t.cv_url || "",
+      interview_video_url: t.interviewVideoUrl || t.interview_video_url || "",
       // Preserve ownership — fall back to current user's id on first save (new trainee)
       created_by:        t.created_by || profile?.id || null,
     };
@@ -1559,6 +1707,8 @@ function TraineePortal({ profile, onLogout, darkMode, onToggleDark }) {
               notes:      r.notes || "",
               certificateImage: r.certificate_image || "",
               certificateText:  r.certificate_text  || "",
+              cvUrl:            r.cv_url || "",
+              interviewVideoUrl: r.interview_video_url || "",
               leavedReason: r.leaved_reason || "",
               leavedDate:   r.leaved_date   || "",
             };
