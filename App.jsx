@@ -1511,89 +1511,553 @@ function AdminPanel({ currentUserId, onClose, showToast }) {
 }
 
 /* ═══════════════════════════════ ANALYTICS REPORT ═══════════════════════════════ */
+// ── Pure-SVG donut chart (no chart lib in package.json) ──
+function AnalyticsDonut({ data, size = 130, label = "" }) {
+  const total = data.reduce((s, d) => s + (d.value || 0), 0);
+  const radius = size / 2 - 14;
+  const circumference = 2 * Math.PI * radius;
+  let cumulative = 0;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="donut chart">
+      {/* Track ring */}
+      <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke="#f1f5f9" strokeWidth={16}/>
+      {total > 0 && data.filter(d => d.value > 0).map((d, i) => {
+        const fraction = d.value / total;
+        const dashLength = fraction * circumference;
+        const offset = -cumulative * circumference;
+        cumulative += fraction;
+        return (
+          <circle key={i}
+            cx={size/2} cy={size/2}
+            r={radius}
+            fill="none"
+            stroke={d.color}
+            strokeWidth={16}
+            strokeLinecap="butt"
+            strokeDasharray={`${dashLength} ${circumference - dashLength}`}
+            strokeDashoffset={offset}
+            transform={`rotate(-90 ${size/2} ${size/2})`}
+          />
+        );
+      })}
+      <text x={size/2} y={size/2 - 2} textAnchor="middle" dominantBaseline="central" fontSize={size > 110 ? 22 : 18} fontWeight="800" fill="#1e293b">
+        {total}
+      </text>
+      <text x={size/2} y={size/2 + 14} textAnchor="middle" dominantBaseline="central" fontSize="9" fontWeight="600" fill="#94a3b8" letterSpacing="0.5">
+        {label || "TRAINEES"}
+      </text>
+    </svg>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Analytics Dashboard — replaces the simple PDF picker.
+// Five sections: summary table · drill-down cards · heatmap ·
+// donut charts · predicted-best leaderboard.
+// ─────────────────────────────────────────────────────────────
 function AnalyticsModal({ trainees, onClose, showToast }) {
-  const today = new Date();
-  const fmt = (d) => d.toISOString().slice(0, 10);
-  const [range, setRange]   = useState("30");           // "7" | "30" | "custom"
-  const [from,  setFrom]    = useState(fmt(new Date(today.getTime() - 30*86400000)));
-  const [to,    setTo]      = useState(fmt(today));
-  const [busy,  setBusy]    = useState(false);
+  const today  = new Date();
+  const fmtIso = (d) => d.toISOString().slice(0, 10);
 
-  const computeWindow = () => {
-    if (range === "7")  return { start: new Date(today.getTime() - 7*86400000),  end: new Date(today.getTime() + 86400000) };
-    if (range === "30") return { start: new Date(today.getTime() - 30*86400000), end: new Date(today.getTime() + 86400000) };
-    return { start: new Date(from + "T00:00:00"), end: new Date(to + "T23:59:59") };
+  const [range, setRange] = useState("all"); // "all" | "7" | "30" | "custom"
+  const [from,  setFrom]  = useState(fmtIso(new Date(today.getTime() - 30*86400000)));
+  const [to,    setTo]    = useState(fmtIso(today));
+  const [openCards, setOpenCards] = useState({ 0: true }); // index → expanded
+  const [sortKey, setSortKey] = useState("selRate");
+  const [sortDir, setSortDir] = useState("desc"); // "asc" | "desc"
+
+  // ── Window math ──
+  const { startDate, endDate, allTime } = useMemo(() => {
+    if (range === "all")    return { startDate: new Date("1900-01-01"), endDate: new Date("2099-12-31"), allTime: true };
+    if (range === "7")      return { startDate: new Date(today.getTime() - 7*86400000),  endDate: new Date(today.getTime() + 86400000), allTime: false };
+    if (range === "30")     return { startDate: new Date(today.getTime() - 30*86400000), endDate: new Date(today.getTime() + 86400000), allTime: false };
+    return { startDate: new Date(from + "T00:00:00"), endDate: new Date(to + "T23:59:59"), allTime: false };
+  }, [range, from, to]);
+
+  const filtered = useMemo(() => {
+    if (allTime) return trainees;
+    return trainees.filter(t => {
+      const raw = t.enrollDate || t.enroll_date;
+      if (!raw) return false; // exclude rows with no enroll date when filtering
+      const d = new Date(raw);
+      return d >= startDate && d <= endDate;
+    });
+  }, [trainees, allTime, startDate, endDate]);
+
+  // ── Build the full set of onboarder names (configured + any "in the wild" custom names) ──
+  const onboarderNames = useMemo(() => {
+    const set = new Set(ONBOARDERS);
+    filtered.forEach(t => { if (t.onboarder) set.add(t.onboarder); });
+    return [...set];
+  }, [filtered]);
+
+  // ── Per-onboarder computed rows ──
+  const rows = useMemo(() => {
+    return onboarderNames.map(name => {
+      const own = filtered.filter(t => t.onboarder === name);
+      const selected    = own.filter(t => t.status === "Selected").length;
+      const notSelected = own.filter(t => t.status === "Not Selected").length;
+      const leaved      = own.filter(t => t.status === "Leaved").length;
+      const active      = own.length - selected - notSelected - leaved; // includes Pending + In Progress
+
+      const trained = own.filter(t =>
+        getCompletedCount(t.phases) >= PHASES.length || getPhaseDay(t.phases) >= 7
+      ).length;
+
+      const selRate = own.length ? (selected / own.length) * 100 : 0;
+
+      const milestones = PHASES.map(p => ({
+        key:   p.key,
+        label: p.short,
+        color: p.color,
+        rate:  own.length ? (own.filter(t => t.phases?.[p.key]).length / own.length) * 100 : 0,
+      }));
+
+      const avgDay = own.length
+        ? own.reduce((s, t) => s + getPhaseDay(t.phases), 0) / own.length
+        : 0;
+      const avgMilestoneRate = milestones.reduce((s, m) => s + m.rate, 0) / PHASES.length;
+
+      // Score = (selRate × 0.4) + (avg milestone % × 0.35) + (avgDay/7 × 100 × 0.25)
+      const dayScore = Math.min(avgDay / 7, 1) * 100;
+      const score = (selRate * 0.4) + (avgMilestoneRate * 0.35) + (dayScore * 0.25);
+
+      return {
+        name, total: own.length, selected, notSelected, leaved, active, trained,
+        selRate, milestones, avgDay, avgMilestoneRate, score, trainees: own,
+      };
+    });
+  }, [filtered, onboarderNames]);
+
+  // ── Sort for Section 1 ──
+  const sortedRows = useMemo(() => {
+    const list = [...rows];
+    list.sort((a, b) => {
+      const av = a[sortKey] ?? 0, bv = b[sortKey] ?? 0;
+      if (typeof av === "string") return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+      return sortDir === "asc" ? av - bv : bv - av;
+    });
+    return list;
+  }, [rows, sortKey, sortDir]);
+
+  const ranked = useMemo(() => [...rows].sort((a, b) => b.score - a.score), [rows]);
+
+  const toggleSort = (key) => {
+    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir("desc"); }
   };
 
-  const generate = async () => {
-    setBusy(true);
+  // ── Colour helpers ──
+  const rateBadge = (pct) => {
+    if (pct >= 60) return { bg:"#dcfce7", color:"#15803d", border:"#86efac" };
+    if (pct >= 40) return { bg:"#fef9c3", color:"#a16207", border:"#fde047" };
+    return         { bg:"#fee2e2", color:"#b91c1c", border:"#fca5a5" };
+  };
+  const heatColor = (pct) => {
+    if (pct >= 80) return { bg:"#dcfce7", color:"#15803d" };
+    if (pct >= 50) return { bg:"#fef9c3", color:"#a16207" };
+    return         { bg:"#fee2e2", color:"#b91c1c" };
+  };
+  const milestoneRateColor = (pct) => {
+    if (pct >= 80) return "#22c55e";
+    if (pct >= 50) return "#eab308";
+    return "#ef4444";
+  };
+
+  // ── Auto insight for the leaderboard ──
+  const insight = (r) => {
+    if (r.total === 0) return "No trainees assigned in this period.";
+    const parts = [];
+    if (r.selRate >= 60)      parts.push(`Excellent selection rate at ${r.selRate.toFixed(0)}%`);
+    else if (r.selRate >= 40) parts.push(`Solid selection rate at ${r.selRate.toFixed(0)}%`);
+    else if (r.selRate > 0)   parts.push(`Selection rate at ${r.selRate.toFixed(0)}%`);
+    else                      parts.push(`No selections yet`);
+
+    if (r.avgMilestoneRate >= 75)      parts.push("strong milestone completion");
+    else if (r.avgMilestoneRate >= 50) parts.push("moderate milestone completion");
+    else                               parts.push("milestone completion needs lift");
+
+    if (r.avgDay >= 6)      parts.push("trainees reaching late stages");
+    else if (r.avgDay >= 4) parts.push("trainees progressing mid-funnel");
+    return parts.join(". ") + ".";
+  };
+
+  // ── Exports ──
+  const exportCsv = () => {
+    const header = ["Onboarder","Total Onboarded","Currently Active","Successfully Trained","Selected","Not Selected","Leaved","Selection Rate (%)"];
+    const escape = (s) => `"${String(s).replace(/"/g, '""')}"`;
+    const lines = [header.map(escape).join(",")];
+    sortedRows.forEach(r => {
+      lines.push([r.name, r.total, r.active, r.trained, r.selected, r.notSelected, r.leaved, r.selRate.toFixed(1)].map(escape).join(","));
+    });
+    const blob = new Blob(["﻿" + lines.join("\n")], { type:"text/csv;charset=utf-8" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url;
+    a.download = `TrainFlow-OnboarderSummary-${fmtIso(new Date())}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast?.("success", "CSV downloaded");
+  };
+  const exportPdf = () => {
     try {
-      const { start, end } = computeWindow();
-      generatePdfReport(trainees, start, end);
-      showToast?.("success", "Report downloaded");
-      onClose();
+      generatePdfReport(filtered, allTime ? new Date("2000-01-01") : startDate, allTime ? new Date() : endDate);
+      showToast?.("success", "PDF downloaded");
     } catch (e) {
-      console.error(e);
-      showToast?.("error", `Report failed: ${e.message || e}`);
+      console.error(e); showToast?.("error", `PDF failed: ${e.message || e}`);
     }
-    setBusy(false);
   };
+
+  // ── Render ──
+  const th = { fontSize:11, fontWeight:800, color:"#64748b", textTransform:"uppercase", letterSpacing:"0.05em", padding:"10px 12px", textAlign:"left", whiteSpace:"nowrap", cursor:"pointer", userSelect:"none", borderBottom:"2px solid #e8eaf6", background:"#fafbff" };
+  const td = { padding:"10px 12px", fontSize:13, color:"#1e293b", borderBottom:"1px solid #f1f5f9" };
 
   return (
     <div className="tf-modal-root" style={{ position:"fixed",inset:0,background:"#0009",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }} onClick={onClose}>
-      <div className="tf-modal-card" style={{ width:480,maxWidth:"95vw",background:"#fff",borderRadius:20,padding:32,fontFamily:"'DM Sans',sans-serif",boxShadow:"0 32px 80px #0004" }} onClick={e=>e.stopPropagation()}>
-        <div style={{ textAlign:"center", marginBottom:18 }}>
-          <div style={{ fontSize:42, marginBottom:6 }}>📈</div>
-          <h2 style={{ margin:0, fontFamily:"'Sora',sans-serif", fontWeight:800, fontSize:20, color:"#1e293b" }}>Analytics Report</h2>
-          <p style={{ margin:"6px 0 0", fontSize:13, color:"#64748b", lineHeight:1.5 }}>Pick a time period and download a polished PDF.</p>
+      <div
+        className="tf-modal-card"
+        style={{
+          width:1100, maxWidth:"97vw",
+          height:"92vh", maxHeight:"92vh",
+          background:"#fff", borderRadius:20, boxShadow:"0 32px 80px #0004",
+          display:"flex", flexDirection:"column", fontFamily:"'DM Sans',sans-serif",
+          overflow:"hidden",
+        }}
+        onClick={e=>e.stopPropagation()}
+      >
+        {/* ── Header ── */}
+        <div style={{
+          padding:"18px 22px", borderBottom:"2px solid #e8eaf6",
+          background:"linear-gradient(135deg,#f5f3ff,#eef2ff)",
+          display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, flexShrink:0, flexWrap:"wrap",
+        }}>
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            <div style={{ width:44, height:44, borderRadius:12, background:"linear-gradient(135deg,#7C3AED,#6366F1)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, boxShadow:"0 4px 14px rgba(124,58,237,0.35)" }}>📈</div>
+            <div>
+              <div style={{ fontFamily:"'Sora',sans-serif", fontWeight:800, fontSize:19, color:"#1e293b" }}>Onboarder Analytics</div>
+              <div style={{ fontSize:12, color:"#6366f1", fontWeight:600, marginTop:2 }}>
+                {filtered.length} trainee{filtered.length===1?"":"s"} · {onboarderNames.length} onboarder{onboarderNames.length===1?"":"s"}
+              </div>
+            </div>
+          </div>
+          <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+            <button onClick={exportCsv} title="Export Section 1 summary as CSV" style={{ padding:"9px 14px", borderRadius:9, border:"1.5px solid #c7d2fe", background:"#fff", color:"#6366f1", fontWeight:700, fontSize:12, cursor:"pointer", fontFamily:"inherit" }}>📥 Export CSV</button>
+            <button onClick={exportPdf} title="Download polished PDF report" style={{ padding:"9px 14px", borderRadius:9, border:"none", background:"linear-gradient(135deg,#7C3AED,#6366F1)", color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer", fontFamily:"inherit", boxShadow:"0 4px 14px rgba(124,58,237,0.25)" }}>📄 PDF Report</button>
+            <button onClick={onClose} aria-label="Close" style={{ width:34, height:34, borderRadius:9, border:"none", background:"#fff", color:"#64748b", fontSize:20, cursor:"pointer", boxShadow:"0 2px 8px #0001" }}>×</button>
+          </div>
         </div>
 
-        <div style={{ display:"flex", gap:8, marginBottom:14, flexWrap:"wrap" }}>
+        {/* ── Date filter strip ── */}
+        <div style={{ padding:"12px 22px", borderBottom:"1.5px solid #f1f5f9", display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", flexShrink:0, background:"#fff" }}>
+          <span style={{ fontSize:12, fontWeight:700, color:"#64748b", textTransform:"uppercase", letterSpacing:"0.05em" }}>Period:</span>
           {[
-            { key:"7",      label:"Last 7 Days"  },
-            { key:"30",     label:"Last 30 Days" },
-            { key:"custom", label:"Custom"       },
+            { key:"all",    label:"All Time"      },
+            { key:"7",      label:"Last 7 Days"   },
+            { key:"30",     label:"Last 30 Days"  },
+            { key:"custom", label:"Custom"        },
           ].map(p => (
             <button key={p.key} onClick={()=>setRange(p.key)} style={{
-              flex:1, minWidth:110,
-              padding:"11px 10px", borderRadius:11, fontWeight:700, fontSize:13,
-              border: range===p.key ? "2px solid #7C3AED" : "1.5px solid #e2e8f0",
+              padding:"7px 13px", borderRadius:99, fontWeight:700, fontSize:12,
+              border: range===p.key ? "1.5px solid transparent" : "1.5px solid #e2e8f0",
               background: range===p.key ? "linear-gradient(135deg,#7C3AED,#6366F1)" : "#fff",
               color: range===p.key ? "#fff" : "#64748b",
               cursor:"pointer", fontFamily:"inherit", transition:"all 0.15s",
-              boxShadow: range===p.key ? "0 4px 14px rgba(124,58,237,0.3)" : "none",
+              boxShadow: range===p.key ? "0 3px 10px rgba(124,58,237,0.3)" : "none",
             }}>{p.label}</button>
           ))}
+          {range === "custom" && (
+            <>
+              <input type="date" value={from} max={to} onChange={e=>setFrom(e.target.value)}
+                style={{ padding:"7px 10px", border:"1.5px solid #e2e8f0", borderRadius:8, fontSize:12, fontFamily:"inherit", outline:"none" }}/>
+              <span style={{ fontSize:12, color:"#94a3b8" }}>to</span>
+              <input type="date" value={to} min={from} onChange={e=>setTo(e.target.value)}
+                style={{ padding:"7px 10px", border:"1.5px solid #e2e8f0", borderRadius:8, fontSize:12, fontFamily:"inherit", outline:"none" }}/>
+            </>
+          )}
         </div>
 
-        {range === "custom" && (
-          <div style={{ display:"flex", gap:10, marginBottom:14 }}>
-            <div style={{ flex:1 }}>
-              <label style={{ display:"block", fontSize:12, fontWeight:600, color:"#475569", marginBottom:5 }}>From</label>
-              <input type="date" value={from} max={to} onChange={e=>setFrom(e.target.value)} style={{ width:"100%", padding:"10px 12px", border:"1.5px solid #e2e8f0", borderRadius:9, fontSize:13, fontFamily:"inherit", outline:"none", boxSizing:"border-box" }}/>
+        {/* ── Scroll body ── */}
+        <div style={{ flex:1, overflowY:"auto", padding:"22px", background:"#fafbff" }}>
+          {filtered.length === 0 ? (
+            <div style={{ textAlign:"center", padding:"80px 20px", color:"#94a3b8" }}>
+              <div style={{ fontSize:46, marginBottom:10 }}>📊</div>
+              <div style={{ fontSize:15, fontWeight:600 }}>No trainees match this period.</div>
+              <div style={{ fontSize:12, marginTop:4 }}>Try widening the date range.</div>
             </div>
-            <div style={{ flex:1 }}>
-              <label style={{ display:"block", fontSize:12, fontWeight:600, color:"#475569", marginBottom:5 }}>To</label>
-              <input type="date" value={to} min={from} onChange={e=>setTo(e.target.value)} style={{ width:"100%", padding:"10px 12px", border:"1.5px solid #e2e8f0", borderRadius:9, fontSize:13, fontFamily:"inherit", outline:"none", boxSizing:"border-box" }}/>
-            </div>
-          </div>
-        )}
+          ) : (
+            <>
+              {/* ───── SECTION 1 — SUMMARY TABLE ───── */}
+              <SectionTitle n="1" title="Onboarder Summary" subtitle="Click any column header to sort." />
+              <div style={{ background:"#fff", borderRadius:14, border:"1.5px solid #e8eaf6", overflow:"hidden", boxShadow:"0 2px 12px rgba(15,23,42,0.04)", marginBottom:28 }}>
+                <div style={{ overflowX:"auto" }}>
+                  <table style={{ width:"100%", minWidth:760, borderCollapse:"collapse" }}>
+                    <thead>
+                      <tr>
+                        {[
+                          { key:"name",        label:"Onboarder"            },
+                          { key:"total",       label:"Total"                },
+                          { key:"active",      label:"Active"               },
+                          { key:"trained",     label:"Trained"              },
+                          { key:"selected",    label:"Selected"             },
+                          { key:"notSelected", label:"Not Sel."             },
+                          { key:"leaved",      label:"Leaved"               },
+                          { key:"selRate",     label:"Selection Rate"       },
+                        ].map(c => (
+                          <th key={c.key} onClick={()=>toggleSort(c.key)} style={th}>
+                            {c.label}
+                            {sortKey === c.key && <span style={{ marginLeft:4, color:"#7C3AED" }}>{sortDir==="asc"?"▲":"▼"}</span>}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortedRows.map((r, i) => {
+                        const badge = rateBadge(r.selRate);
+                        return (
+                          <tr key={r.name} style={{ background: i % 2 === 0 ? "#fff" : "#fafbff" }}>
+                            <td style={{ ...td, fontWeight:700 }}>{r.name}</td>
+                            <td style={td}>{r.total}</td>
+                            <td style={td}><span style={{ color:"#0ea5e9", fontWeight:700 }}>{r.active}</span></td>
+                            <td style={td}><span style={{ color:"#6366f1", fontWeight:700 }}>{r.trained}</span></td>
+                            <td style={td}><span style={{ color:"#22c55e", fontWeight:700 }}>{r.selected}</span></td>
+                            <td style={td}><span style={{ color:"#f59e0b", fontWeight:700 }}>{r.notSelected}</span></td>
+                            <td style={td}><span style={{ color:"#ef4444", fontWeight:700 }}>{r.leaved}</span></td>
+                            <td style={td}>
+                              <span style={{ background:badge.bg, color:badge.color, border:`1.5px solid ${badge.border}`, padding:"3px 10px", borderRadius:99, fontWeight:800, fontSize:12 }}>
+                                {r.selRate.toFixed(1)}%
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
 
-        <div style={{ background:"#f8faff", border:"1.5px solid #e0e7ff", borderRadius:11, padding:"12px 14px", marginBottom:18, fontSize:12, color:"#4338ca", lineHeight:1.5 }}>
-          📋 The report covers all trainees enrolled in the selected period and includes onboarder performance, stage drop-offs, and breakdowns by outcome.
-        </div>
+              {/* ───── SECTION 2 — DRILL-DOWN CARDS ───── */}
+              <SectionTitle n="2" title="Per-Onboarder Drill-Down" subtitle="Click any card to expand milestone breakdown." />
+              <div style={{ display:"grid", gridTemplateColumns:"1fr", gap:14, marginBottom:28 }}>
+                {rows.map((r, idx) => {
+                  const open = !!openCards[idx];
+                  const segments = [
+                    { label:"Selected",     value:r.selected,    color:"#22c55e" },
+                    { label:"Not Selected", value:r.notSelected, color:"#ef4444" },
+                    { label:"Leaved",       value:r.leaved,      color:"#f59e0b" },
+                    { label:"Active",       value:r.active,      color:"#0ea5e9" },
+                  ];
+                  const initial = (r.name[0] || "?").toUpperCase();
+                  return (
+                    <div key={r.name} style={{ background:"#fff", borderRadius:14, border:"1.5px solid #e8eaf6", overflow:"hidden", boxShadow:"0 2px 12px rgba(15,23,42,0.04)" }}>
+                      {/* Card header */}
+                      <button
+                        onClick={()=>setOpenCards(o => ({ ...o, [idx]: !o[idx] }))}
+                        style={{
+                          width:"100%", padding:"14px 16px", border:"none", background:"transparent",
+                          display:"flex", alignItems:"center", gap:14, cursor:"pointer", fontFamily:"inherit",
+                          textAlign:"left",
+                        }}
+                      >
+                        <div style={{ width:42, height:42, borderRadius:12, background:`linear-gradient(135deg,${ONBOARDER_CONFIG[r.name]?.color||"#7C3AED"}22,${ONBOARDER_CONFIG[r.name]?.color||"#7C3AED"}44)`, display:"flex", alignItems:"center", justifyContent:"center", fontWeight:800, color: ONBOARDER_CONFIG[r.name]?.color||"#7C3AED", fontSize:16 }}>{initial}</div>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontFamily:"'Sora',sans-serif", fontWeight:800, fontSize:15, color:"#1e293b" }}>{r.name}</div>
+                          <div style={{ fontSize:11, color:"#94a3b8", fontWeight:600, marginTop:2 }}>
+                            {r.total} trainee{r.total===1?"":"s"} · avg phase day {r.avgDay.toFixed(1)} · score {r.score.toFixed(1)}
+                          </div>
+                        </div>
+                        <span style={{ fontSize:18, color:"#94a3b8", transition:"transform 0.2s", transform: open ? "rotate(180deg)" : "rotate(0deg)" }}>▼</span>
+                      </button>
 
-        <div style={{ display:"flex", gap:10 }}>
-          <button onClick={onClose} disabled={busy} style={{ flex:1, padding:"12px", borderRadius:11, border:"1.5px solid #e2e8f0", background:"#fff", color:"#64748b", fontWeight:700, fontSize:13, cursor: busy ? "not-allowed" : "pointer", fontFamily:"inherit" }}>Cancel</button>
-          <button onClick={generate} disabled={busy} style={{
-            flex:2, padding:"12px", borderRadius:11, border:"none",
-            background: busy ? "#cbd5e1" : "linear-gradient(135deg,#7C3AED,#6366F1)",
-            color:"#fff", fontWeight:800, fontSize:14,
-            cursor: busy ? "wait" : "pointer", fontFamily:"inherit",
-            boxShadow: busy ? "none" : "0 6px 20px rgba(124,58,237,0.35)",
-          }}>{busy ? "Generating…" : "📄 Generate Report"}</button>
+                      {/* Always-visible stacked bar */}
+                      <div style={{ padding:"0 16px 14px" }}>
+                        {r.total === 0 ? (
+                          <div style={{ height:14, borderRadius:99, background:"#f1f5f9" }}/>
+                        ) : (
+                          <div style={{ display:"flex", height:14, borderRadius:99, overflow:"hidden", background:"#f1f5f9" }}>
+                            {segments.filter(s => s.value > 0).map((s, j) => (
+                              <div key={j} title={`${s.label}: ${s.value}`} style={{
+                                width: `${(s.value/r.total)*100}%`,
+                                background: s.color,
+                              }}/>
+                            ))}
+                          </div>
+                        )}
+                        <div style={{ display:"flex", flexWrap:"wrap", gap:12, marginTop:8, fontSize:11 }}>
+                          {segments.map(s => (
+                            <div key={s.label} style={{ display:"flex", alignItems:"center", gap:5 }}>
+                              <span style={{ width:8, height:8, borderRadius:99, background:s.color, display:"inline-block" }}/>
+                              <span style={{ color:"#64748b", fontWeight:600 }}>{s.label} <strong style={{ color:"#1e293b" }}>{s.value}</strong></span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Drill-down content */}
+                      {open && (
+                        <div style={{ borderTop:"1.5px solid #f1f5f9", padding:"14px 16px 18px", background:"#fafbff" }}>
+                          <div style={{ fontSize:11, fontWeight:800, color:"#94a3b8", textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:10 }}>
+                            Milestone Completion ({PHASES.length} stages)
+                          </div>
+                          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))", gap:10 }}>
+                            {r.milestones.map(m => {
+                              const c = milestoneRateColor(m.rate);
+                              return (
+                                <div key={m.key} style={{ background:"#fff", border:"1.5px solid #e8eaf6", borderRadius:10, padding:"10px 12px" }}>
+                                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:5 }}>
+                                    <span style={{ fontSize:11, fontWeight:700, color:"#1e293b" }}>{m.label}</span>
+                                    <span style={{ fontSize:11, fontWeight:800, color:c }}>{m.rate.toFixed(0)}%</span>
+                                  </div>
+                                  <div style={{ height:6, borderRadius:99, background:"#f1f5f9", overflow:"hidden" }}>
+                                    <div style={{ width:`${m.rate}%`, height:"100%", background:c, transition:"width 0.3s" }}/>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <div style={{ marginTop:14, display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))", gap:10 }}>
+                            <StatBox label="Avg phase day"        value={r.avgDay.toFixed(1)}        color="#6366f1" />
+                            <StatBox label="Avg milestone rate"  value={`${r.avgMilestoneRate.toFixed(0)}%`} color="#0ea5e9" />
+                            <StatBox label="Selection rate"      value={`${r.selRate.toFixed(0)}%`} color="#22c55e" />
+                            <StatBox label="Prediction score"    value={r.score.toFixed(1)}         color="#7C3AED" />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* ───── SECTION 3 — HEATMAP ───── */}
+              <SectionTitle n="3" title="Milestone Completion Heatmap" subtitle="Each cell = % of that onboarder's trainees who completed the stage." />
+              <div style={{ background:"#fff", borderRadius:14, border:"1.5px solid #e8eaf6", overflow:"hidden", boxShadow:"0 2px 12px rgba(15,23,42,0.04)", marginBottom:28 }}>
+                <div style={{ overflowX:"auto" }}>
+                  <table style={{ width:"100%", minWidth: 120 + rows.length * 90, borderCollapse:"collapse" }}>
+                    <thead>
+                      <tr>
+                        <th style={{ ...th, position:"sticky", left:0, background:"#fafbff", zIndex:1 }}>Stage</th>
+                        {rows.map(r => <th key={r.name} style={{ ...th, textAlign:"center" }}>{r.name}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {PHASES.map((p, idx) => (
+                        <tr key={p.key} style={{ background: idx % 2 === 0 ? "#fff" : "#fafbff" }}>
+                          <td style={{ ...td, fontWeight:700, position:"sticky", left:0, background: idx % 2 === 0 ? "#fff" : "#fafbff", zIndex:1, whiteSpace:"nowrap" }}>
+                            <span style={{ color: p.color, marginRight:6 }}>{p.emoji}</span>{p.short}
+                          </td>
+                          {rows.map(r => {
+                            const m = r.milestones.find(x => x.key === p.key);
+                            if (!m || r.total === 0) {
+                              return <td key={r.name} style={{ ...td, textAlign:"center", color:"#cbd5e1", fontWeight:600 }}>—</td>;
+                            }
+                            const c = heatColor(m.rate);
+                            return (
+                              <td key={r.name} style={{ ...td, textAlign:"center", padding:6 }}>
+                                <div style={{ background:c.bg, color:c.color, padding:"6px 0", borderRadius:7, fontWeight:800, fontSize:12 }}>
+                                  {m.rate.toFixed(0)}%
+                                </div>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* ───── SECTION 4 — DONUTS ───── */}
+              <SectionTitle n="4" title="Trainee Outcome Breakdown" subtitle="Pure-SVG donut per onboarder (no chart library available in this project)." />
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))", gap:14, marginBottom:28 }}>
+                {rows.map(r => {
+                  const items = [
+                    { label:"Selected",     value:r.selected,    color:"#22c55e" },
+                    { label:"Not Selected", value:r.notSelected, color:"#ef4444" },
+                    { label:"Leaved",       value:r.leaved,      color:"#f59e0b" },
+                    { label:"Active",       value:r.active,      color:"#0ea5e9" },
+                  ];
+                  return (
+                    <div key={r.name} style={{ background:"#fff", borderRadius:14, border:"1.5px solid #e8eaf6", padding:"16px", display:"flex", flexDirection:"column", alignItems:"center", gap:10, boxShadow:"0 2px 12px rgba(15,23,42,0.04)" }}>
+                      <div style={{ fontWeight:800, fontSize:14, color:"#1e293b", fontFamily:"'Sora',sans-serif" }}>{r.name}</div>
+                      <AnalyticsDonut data={items} size={140} label="TRAINEES" />
+                      <div style={{ width:"100%", display:"flex", flexDirection:"column", gap:5 }}>
+                        {items.map(s => {
+                          const pct = r.total ? ((s.value / r.total) * 100).toFixed(0) : 0;
+                          return (
+                            <div key={s.label} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", fontSize:11 }}>
+                              <span style={{ display:"flex", alignItems:"center", gap:6, color:"#475569", fontWeight:600 }}>
+                                <span style={{ width:9, height:9, borderRadius:2, background:s.color, display:"inline-block" }}/>
+                                {s.label}
+                              </span>
+                              <span style={{ color:"#1e293b", fontWeight:700 }}>{s.value} · {pct}%</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* ───── SECTION 5 — PREDICTION LEADERBOARD ───── */}
+              <SectionTitle n="5" title="Predicted Best Onboarder" subtitle="Score = (Selection Rate × 0.4) + (Avg Milestone % × 0.35) + (Avg Phase Day ÷ 7 × 100 × 0.25)" />
+              <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:14 }}>
+                {ranked.map((r, idx) => {
+                  const top = idx === 0 && r.total > 0;
+                  return (
+                    <div key={r.name} style={{
+                      display:"flex", alignItems:"center", gap:14, padding:"14px 16px",
+                      borderRadius:14,
+                      background: top ? "linear-gradient(135deg,#fef3c7,#fde68a)" : "#fff",
+                      border:`1.5px solid ${top ? "#f59e0b" : "#e8eaf6"}`,
+                      boxShadow: top ? "0 4px 16px rgba(245,158,11,0.25)" : "0 2px 12px rgba(15,23,42,0.04)",
+                    }}>
+                      <div style={{
+                        width:42, height:42, borderRadius:12, flexShrink:0,
+                        background: top ? "linear-gradient(135deg,#f59e0b,#d97706)" : "#f1f5f9",
+                        color: top ? "#fff" : "#64748b",
+                        display:"flex", alignItems:"center", justifyContent:"center",
+                        fontFamily:"'Sora',sans-serif", fontWeight:800, fontSize:18,
+                      }}>{idx + 1}</div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontFamily:"'Sora',sans-serif", fontWeight:800, fontSize:15, color:"#1e293b", display:"flex", alignItems:"center", gap:8 }}>
+                          {r.name}
+                          {top && <span style={{ fontSize:11, fontWeight:800, background:"#fff", color:"#b45309", padding:"2px 8px", borderRadius:99 }}>⭐ TOP PERFORMER</span>}
+                        </div>
+                        <div style={{ fontSize:12, color:"#64748b", marginTop:3, lineHeight:1.5 }}>{insight(r)}</div>
+                      </div>
+                      <div style={{ textAlign:"right", flexShrink:0 }}>
+                        <div style={{ fontSize:22, fontWeight:800, color: top ? "#92400e" : "#7C3AED", fontFamily:"'Sora',sans-serif", lineHeight:1 }}>{r.score.toFixed(1)}</div>
+                        <div style={{ fontSize:10, color:"#94a3b8", fontWeight:700, letterSpacing:"0.05em", marginTop:2 }}>OUT OF 100</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function SectionTitle({ n, title, subtitle }) {
+  return (
+    <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12 }}>
+      <div style={{ width:30, height:30, borderRadius:8, background:"linear-gradient(135deg,#7C3AED,#6366F1)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:800, fontSize:13, flexShrink:0 }}>{n}</div>
+      <div style={{ flex:1 }}>
+        <div style={{ fontFamily:"'Sora',sans-serif", fontWeight:800, fontSize:16, color:"#1e293b" }}>{title}</div>
+        {subtitle && <div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>{subtitle}</div>}
+      </div>
+    </div>
+  );
+}
+
+function StatBox({ label, value, color }) {
+  return (
+    <div style={{ background:"#fff", border:"1.5px solid #e8eaf6", borderRadius:10, padding:"10px 12px" }}>
+      <div style={{ fontSize:10, fontWeight:700, color:"#94a3b8", textTransform:"uppercase", letterSpacing:"0.05em" }}>{label}</div>
+      <div style={{ fontFamily:"'Sora',sans-serif", fontWeight:800, fontSize:18, color, marginTop:2 }}>{value}</div>
     </div>
   );
 }
@@ -2846,11 +3310,7 @@ function TraineePortal({ profile, onLogout, darkMode, onToggleDark }) {
               <span style={{ fontSize:12,color:"#64748b" }}>{status}</span>
             </div>
           ))}
-          <div style={{ marginLeft:"auto",display:"flex",alignItems:"center",gap:6 }}>
-            <div style={{ width:14,height:14,background:"#fef2f2",border:"2px solid #ef4444",borderRadius:3 }}/>
-            <span style={{ fontSize:12,color:"#ef4444",fontWeight:600 }}>Overdue</span>
-          </div>
-          <div style={{ fontSize:12,color:"#94a3b8" }}>· Click any row to view/edit remarks per stage</div>
+          <div style={{ marginLeft:"auto",fontSize:12,color:"#94a3b8" }}>· Click any row to view/edit remarks per stage</div>
         </div>
 
         {/* ── Pending Section ── (awaiting outcome decision) */}
