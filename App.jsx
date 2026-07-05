@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
 import * as XLSX from "xlsx-js-style";
 import jsPDF from "jspdf";
@@ -38,12 +38,25 @@ const PHASE_REMARK_COL = {
   finalTest:       "final_test_remarks",
 };
 
-const ONBOARDERS = ["Sarthak", "Archita", "Kritika"];
-const ONBOARDER_CONFIG = {
-  Sarthak: { color: "#6366f1", bg: "#eef2ff" },
-  Archita: { color: "#0ea5e9", bg: "#f0f9ff" },
-  Kritika: { color: "#ec4899", bg: "#fdf2f8" },
-};
+// Onboarder colors are derived, not stored — any user's name deterministically
+// maps to a palette slot, so newly created users get a stable color without
+// being named in code. `trainee.onboarder` still stores the user's Full Name.
+const ONBOARDER_PALETTE = [
+  { color: "#6366f1", bg: "#eef2ff" }, // indigo
+  { color: "#0ea5e9", bg: "#f0f9ff" }, // sky
+  { color: "#ec4899", bg: "#fdf2f8" }, // pink
+  { color: "#22c55e", bg: "#f0fdf4" }, // green
+  { color: "#f59e0b", bg: "#fffbeb" }, // amber
+  { color: "#8b5cf6", bg: "#f5f3ff" }, // violet
+  { color: "#14b8a6", bg: "#f0fdfa" }, // teal
+  { color: "#ef4444", bg: "#fef2f2" }, // red
+];
+function colorForOnboarder(name) {
+  if (!name) return { color: "#64748b", bg: "#f1f5f9" };
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = ((h << 5) - h + name.charCodeAt(i)) | 0;
+  return ONBOARDER_PALETTE[Math.abs(h) % ONBOARDER_PALETTE.length];
+}
 
 const STATUSES = ["Not Started", "In Progress", "Completed", "Dropped", "Interview Pending", "Pending", "Selected", "Not Selected", "Leaved"];
 const GRADUATED_STATUSES = ["Selected", "Not Selected"];
@@ -296,7 +309,7 @@ function TraineeNotesModal({ trainee, onClose, onUpdate, onDelete, onToast }) {
               <div style={{ fontSize:12, color:"#94a3b8", marginTop:1, display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
                 📱 {formatContact(trainee.contact)} · 📅 Enrolled {new Date(trainee.enrollDate || trainee.enroll_date).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"})}
                 {trainee.onboarder && (
-                  <span style={{ fontWeight:700, padding:"2px 8px", borderRadius:99, background: ONBOARDER_CONFIG[trainee.onboarder]?.bg||"#f1f5f9", color: ONBOARDER_CONFIG[trainee.onboarder]?.color||"#64748b", fontSize:11 }}>
+                  <span style={{ fontWeight:700, padding:"2px 8px", borderRadius:99, background: colorForOnboarder(trainee.onboarder).bg, color: colorForOnboarder(trainee.onboarder).color, fontSize:11 }}>
                     👤 {trainee.onboarder}
                   </span>
                 )}
@@ -830,7 +843,7 @@ function TraineeNotesModal({ trainee, onClose, onUpdate, onDelete, onToast }) {
 }
 
 /* ─── Add Trainee Modal ─── */
-function AddTraineeModal({ onClose, onAdd, isAdmin, defaultOnboarder }) {
+function AddTraineeModal({ onClose, onAdd, isAdmin, defaultOnboarder, onboardersList = [] }) {
   const [form, setForm] = useState({
     name:"",
     contact:"",
@@ -841,7 +854,7 @@ function AddTraineeModal({ onClose, onAdd, isAdmin, defaultOnboarder }) {
   const set = (k,v) => setForm(f => ({...f,[k]:v}));
   // Employees don't need to pick an onboarder — it's auto-set, so name is the only required field
   const canAdd = form.name.trim() && (isAdmin ? !!form.onboarder : true);
-  const ob = ONBOARDER_CONFIG[form.onboarder];
+  const ob = form.onboarder ? colorForOnboarder(form.onboarder) : null;
   return (
     <div style={{ position:"fixed",inset:0,background:"#0008",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center" }} onClick={onClose}>
       <div style={{ background:"#fff",borderRadius:20,padding:36,width:480,maxWidth:"95vw",boxShadow:"0 25px 60px #0003",fontFamily:"'DM Sans',sans-serif" }} onClick={e=>e.stopPropagation()}>
@@ -865,7 +878,7 @@ function AddTraineeModal({ onClose, onAdd, isAdmin, defaultOnboarder }) {
               style={{ width:"100%",padding:"10px 14px",border: form.onboarder ? `2px solid ${ob?.color}88` : "2px solid #e2e8f0",borderRadius:10,fontSize:14,color: form.onboarder ? ob?.color : "#94a3b8",background: form.onboarder ? ob?.bg : "#fff",outline:"none",boxSizing:"border-box",fontFamily:"inherit",fontWeight: form.onboarder ? 700 : 400,cursor:"pointer" }}
             >
               <option value="">— Select onboarder —</option>
-              {ONBOARDERS.map(o=><option key={o} value={o}>{o}</option>)}
+              {onboardersList.map(o=><option key={o} value={o}>{o}</option>)}
             </select>
           </div>
         )}
@@ -1395,7 +1408,8 @@ function BannedScreen({ onLogout }) {
 /* ══════════════════════════════ ADMIN PANEL ══════════════════════════════ */
 // Full user CRUD. Reads from `profiles`; creates/updates/deletes go through
 // /api/users (Vercel serverless function using the service_role key).
-function AdminPanel({ currentUserId, onClose, showToast }) {
+function AdminPanel({ currentUserId, onClose, showToast, onUsersChanged }) {
+  const notifyChange = () => { onUsersChanged?.(); };
   const [users,    setUsers]    = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [creating, setCreating] = useState(false);
@@ -1442,6 +1456,7 @@ function AdminPanel({ currentUserId, onClose, showToast }) {
       setUsers(us => us.map(x => x.id === u.id ? { ...x, is_banned: !newVal } : x));
     } else {
       showToast("success", newVal ? `${u.email} deactivated` : `${u.email} activated`);
+      notifyChange();
     }
   };
 
@@ -1453,6 +1468,7 @@ function AdminPanel({ currentUserId, onClose, showToast }) {
       setUsers(us => us.map(x => x.id === u.id ? { ...x, role: u.role } : x));
     } else {
       showToast("success", `${u.email} → ${newRole}`);
+      notifyChange();
     }
   };
 
@@ -1461,6 +1477,7 @@ function AdminPanel({ currentUserId, onClose, showToast }) {
     showToast("success", "User created");
     setCreating(false);
     await loadUsers();
+    notifyChange();
   };
 
   const handleEdit = async (form) => {
@@ -1471,6 +1488,7 @@ function AdminPanel({ currentUserId, onClose, showToast }) {
     showToast("success", "User updated");
     setEditing(null);
     await loadUsers();
+    notifyChange();
   };
 
   const handleDelete = async () => {
@@ -1480,6 +1498,7 @@ function AdminPanel({ currentUserId, onClose, showToast }) {
       showToast("success", `${deleting.name || deleting.email} deleted`);
       setDeleting(null);
       await loadUsers();
+      notifyChange();
     } catch (e) {
       showToast("error", e.message);
     }
@@ -1689,7 +1708,7 @@ function UserFormModal({ mode, initial, onCancel, onSubmit, busy }) {
 
         <div style={{ padding:"18px 22px", display:"flex", flexDirection:"column", gap:12 }}>
           <FormField label="Full Name" error={errors.name}>
-            <input type="text" value={form.name} onChange={e=>set("name", e.target.value)} placeholder="e.g. Kritika Sharma" style={inputStyle}/>
+            <input type="text" value={form.name} onChange={e=>set("name", e.target.value)} placeholder="Full name" style={inputStyle}/>
           </FormField>
 
           <FormField label="Email" error={errors.email}>
@@ -1802,7 +1821,7 @@ function AnalyticsDonut({ data, size = 130, label = "" }) {
 // Five sections: summary table · drill-down cards · heatmap ·
 // donut charts · predicted-best leaderboard.
 // ─────────────────────────────────────────────────────────────
-function AnalyticsModal({ trainees, onClose, showToast }) {
+function AnalyticsModal({ trainees, onClose, showToast, onboardersList = [] }) {
   const today  = new Date();
   const fmtIso = (d) => d.toISOString().slice(0, 10);
 
@@ -1833,12 +1852,12 @@ function AnalyticsModal({ trainees, onClose, showToast }) {
     });
   }, [trainees, allTime, startDate, endDate]);
 
-  // ── Build the full set of onboarder names (configured + any "in the wild" custom names) ──
+  // ── Build the full set of onboarder names (live users + any legacy names on trainees) ──
   const onboarderNames = useMemo(() => {
-    const set = new Set(ONBOARDERS);
+    const set = new Set(onboardersList);
     filtered.forEach(t => { if (t.onboarder) set.add(t.onboarder); });
     return [...set];
-  }, [filtered]);
+  }, [filtered, onboardersList]);
 
   // ── Per-onboarder computed rows ──
   const rows = useMemo(() => {
@@ -2129,7 +2148,7 @@ function AnalyticsModal({ trainees, onClose, showToast }) {
                           textAlign:"left",
                         }}
                       >
-                        <div style={{ width:42, height:42, borderRadius:12, background:`linear-gradient(135deg,${ONBOARDER_CONFIG[r.name]?.color||"#7C3AED"}22,${ONBOARDER_CONFIG[r.name]?.color||"#7C3AED"}44)`, display:"flex", alignItems:"center", justifyContent:"center", fontWeight:800, color: ONBOARDER_CONFIG[r.name]?.color||"#7C3AED", fontSize:16 }}>{initial}</div>
+                        <div style={{ width:42, height:42, borderRadius:12, background:`linear-gradient(135deg,${colorForOnboarder(r.name).color}22,${colorForOnboarder(r.name).color}44)`, display:"flex", alignItems:"center", justifyContent:"center", fontWeight:800, color: colorForOnboarder(r.name).color, fontSize:16 }}>{initial}</div>
                         <div style={{ flex:1, minWidth:0 }}>
                           <div style={{ fontFamily:"'Sora',sans-serif", fontWeight:800, fontSize:15, color:"#1e293b" }}>{r.name}</div>
                           <div style={{ fontSize:11, color:"#94a3b8", fontWeight:600, marginTop:2 }}>
@@ -2454,10 +2473,11 @@ function TraineePortal({ profile, onLogout, darkMode, onToggleDark }) {
   const [showMobileMenu,   setShowMobileMenu]   = useState(false); // mobile drawer
   const [showInstallSheet, setShowInstallSheet] = useState(false); // install-app modal
   const [showAnalytics,    setShowAnalytics]    = useState(false); // admin-only analytics modal
+  const [onboardersList,   setOnboardersList]   = useState([]);     // names of active users; shared source for all onboarder dropdowns
   const installApp = useInstallApp();
   const [toast,            setToast]            = useState(null); // { type:"success"|"error", msg }
   const pendingSaves = useRef(new Set()); // IDs currently mid-save — blocks real-time bounce-back
-  const onboarderUserMap = useRef({});    // { "Sarthak": "uuid", "Archita": "uuid", ... } — for reassigning created_by
+  const onboarderUserMap = useRef({});    // { "<user name>": "<uuid>", ... } — for reassigning created_by
   const DEFAULT_MESSAGES = {
     intro:"Hi {name}! 👋 Welcome to the DMH Sales Training Program!\n\nWe're excited to have you on board. Here's a quick intro to what the program looks like:\n\n📌 This is a structured 8-day training.\n✅ Each day has specific tasks you need to complete.\n💬 I'll be messaging you daily with your tasks.\n🔓 Each phase unlocks after the previous one is done.\n\nGet ready — let's build something great together! 🚀",
     1:"Hi {name}! 👋 Welcome to Day 1 of the Sales Training Program. Today your tasks are:\n1️⃣ Build your Shopify Store\n2️⃣ Build your Anti-Gravity Website\n3️⃣ Watch the Day 1 Videos\n\nLet me know once done! 💪",
@@ -2643,27 +2663,33 @@ function TraineePortal({ profile, onLogout, darkMode, onToggleDark }) {
     showToast("success", "Reverted to default");
   };
 
-  // ── Load onboarder name → user_id map (admin only — needed to reassign created_by) ──
-  useEffect(() => {
+  // ── Load onboarder list + name→user_id map from `profiles` (admin only) ──
+  // Single source of truth for every onboarder dropdown, filter, and the analytics
+  // grouping. Re-runs when the Users panel mutates (see refreshOnboarders below).
+  const refreshOnboarders = useCallback(async () => {
     if (!isAdmin) return;
-    const loadMap = async () => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, name, email")
-        .eq("is_banned", false);
-      if (error) { console.warn("onboarder map load failed:", error); return; }
-      const map = {};
-      (data || []).forEach(p => {
-        const key = (p.name || "").trim();
-        if (key && !map[key]) map[key] = p.id;
-        // Also index by email username (e.g. "archita@..." → "archita")
-        const emailKey = (p.email || "").split("@")[0].trim();
-        if (emailKey && !map[emailKey]) map[emailKey] = p.id;
-      });
-      onboarderUserMap.current = map;
-    };
-    loadMap();
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, name, email, created_at")
+      .eq("is_banned", false)
+      .order("created_at", { ascending: true });
+    if (error) { console.warn("onboarder load failed:", error); return; }
+    const map = {};
+    const names = [];
+    const seen = new Set();
+    (data || []).forEach(p => {
+      const key = (p.name || "").trim();
+      if (key && !map[key]) map[key] = p.id;
+      // Also index by email username so legacy trainee.onboarder values like "archita" resolve
+      const emailKey = (p.email || "").split("@")[0].trim();
+      if (emailKey && !map[emailKey]) map[emailKey] = p.id;
+      if (key && !seen.has(key)) { names.push(key); seen.add(key); }
+    });
+    onboarderUserMap.current = map;
+    setOnboardersList(names);
   }, [isAdmin]);
+
+  useEffect(() => { refreshOnboarders(); }, [refreshOnboarders]);
 
   // ── Real-time subscriptions — reflect changes from ANY device instantly ──
   useEffect(() => {
@@ -2884,18 +2910,19 @@ function TraineePortal({ profile, onLogout, darkMode, onToggleDark }) {
 
   // ── Export to Excel (admin only) ──
   const exportToExcel = () => {
-    const ORDER = ["Sarthak", "Archita", "Kritika"];
-    const HEADER_COLORS = {
-      Sarthak:    "6366F1", // indigo
-      Archita:    "EC4899", // pink
-      Kritika:    "10B981", // green
-      Unassigned: "64748B", // slate
+    // Group order comes from the live users list; anything referenced on a trainee
+    // that isn't in that list still gets its own group so no data is lost.
+    const ORDER = [...onboardersList];
+    const headerColorFor = (group) => {
+      if (group === "Unassigned") return "64748B"; // slate
+      const c = colorForOnboarder(group).color; // "#rrggbb"
+      return c.replace(/^#/, "").toUpperCase();
     };
 
-    // Build ordered groups
-    const groups = { Sarthak:[], Archita:[], Kritika:[], Unassigned:[] };
+    const groups = { Unassigned: [] };
+    ORDER.forEach(n => { groups[n] = []; });
     trainees.forEach(t => {
-      const k = ORDER.includes(t.onboarder) ? t.onboarder : (t.onboarder ? t.onboarder : "Unassigned");
+      const k = t.onboarder || "Unassigned";
       if (!groups[k]) groups[k] = [];
       groups[k].push(t);
     });
@@ -2989,7 +3016,7 @@ function TraineePortal({ profile, onLogout, darkMode, onToggleDark }) {
     // Style each section header row + merge across the full width
     const merges = [];
     sectionMeta.forEach(({ rowIndex, group }) => {
-      const color = HEADER_COLORS[group] || "6366F1";
+      const color = headerColorFor(group);
       const sectionStyle = {
         font: { bold: true, color: { rgb: "FFFFFF" }, sz: 13 },
         fill: { fgColor: { rgb: color } },
@@ -3030,6 +3057,14 @@ function TraineePortal({ profile, onLogout, darkMode, onToggleDark }) {
   };
 
   const uniqueNames = ["All", ...trainees.map(t=>t.name)];
+
+  // Union of live users + any legacy onboarder names still referenced on trainees
+  // (so a renamed/banned user's historical rows remain filterable and selectable).
+  const onboarderOptions = useMemo(() => {
+    const set = new Set(onboardersList);
+    trainees.forEach(t => { if (t.onboarder) set.add(t.onboarder); });
+    return [...set];
+  }, [onboardersList, trainees]);
 
   if (dbLoading) return (
     <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", background:"linear-gradient(160deg,#f8faff 0%,#f0f4ff 50%,#faf5ff 100%)", fontFamily:"'DM Sans',sans-serif", gap:16 }}>
@@ -3157,9 +3192,9 @@ function TraineePortal({ profile, onLogout, darkMode, onToggleDark }) {
           ))}
           {/* Onboarder filter — admins only (employees see only their own trainees) */}
           {isAdmin && (
-            <select value={filterOnboarder} onChange={e=>setFilterOnboarder(e.target.value)} style={{ padding:"8px 14px",border:"1.5px solid #e2e8f0",borderRadius:9,fontSize:13,color: filterOnboarder!=="All" ? ONBOARDER_CONFIG[filterOnboarder]?.color : "#374151",background: filterOnboarder!=="All" ? ONBOARDER_CONFIG[filterOnboarder]?.bg : "#f8fafc",outline:"none",fontFamily:"inherit",fontWeight: filterOnboarder!=="All" ? 700 : 500,cursor:"pointer",minWidth:150 }}>
+            <select value={filterOnboarder} onChange={e=>setFilterOnboarder(e.target.value)} style={{ padding:"8px 14px",border:"1.5px solid #e2e8f0",borderRadius:9,fontSize:13,color: filterOnboarder!=="All" ? colorForOnboarder(filterOnboarder).color : "#374151",background: filterOnboarder!=="All" ? colorForOnboarder(filterOnboarder).bg : "#f8fafc",outline:"none",fontFamily:"inherit",fontWeight: filterOnboarder!=="All" ? 700 : 500,cursor:"pointer",minWidth:150 }}>
               <option value="All">All Onboarders</option>
-              {ONBOARDERS.map(o=><option key={o} value={o}>{o}</option>)}
+              {onboarderOptions.map(o=><option key={o} value={o}>{o}</option>)}
             </select>
           )}
           <div style={{ flex:1,minWidth:200,position:"relative" }}>
@@ -3274,7 +3309,7 @@ function TraineePortal({ profile, onLogout, darkMode, onToggleDark }) {
                 {/* Onboarder — admins get a dropdown, employees see a read-only badge */}
                 <div style={{ display:"flex",alignItems:"center",justifyContent:"center" }} onClick={e=>e.stopPropagation()}>
                   {(() => {
-                    const ob = ONBOARDER_CONFIG[trainee.onboarder];
+                    const ob = trainee.onboarder ? colorForOnboarder(trainee.onboarder) : null;
                     if (!isAdmin) {
                       return (
                         <span style={{
@@ -3294,7 +3329,7 @@ function TraineePortal({ profile, onLogout, darkMode, onToggleDark }) {
                         background: ob?.bg||"#f8fafc", color: ob?.color||"#64748b",
                         border:`1.5px solid ${ob?.color||"#cbd5e1"}55`, maxWidth:95,
                       }}>
-                        {ONBOARDERS.map(o=><option key={o} value={o}>{o}</option>)}
+                        {onboarderOptions.map(o=><option key={o} value={o}>{o}</option>)}
                       </select>
                     );
                   })()}
@@ -3400,7 +3435,7 @@ function TraineePortal({ profile, onLogout, darkMode, onToggleDark }) {
                           <div style={{ fontWeight:600,fontSize:14,color:"#1e293b" }}>{trainee.name}</div>
                           <div style={{ display:"flex",alignItems:"center",gap:5,marginTop:2,flexWrap:"wrap" }}>
                             <span style={{ fontSize:10,color:"#ca8a04",fontWeight:600 }}>⏳ Awaiting decision</span>
-                            {trainee.onboarder && <span style={{ fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:99,background: ONBOARDER_CONFIG[trainee.onboarder]?.bg||"#f1f5f9",color: ONBOARDER_CONFIG[trainee.onboarder]?.color||"#64748b" }}>👤 {trainee.onboarder}</span>}
+                            {trainee.onboarder && <span style={{ fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:99,background: colorForOnboarder(trainee.onboarder).bg, color: colorForOnboarder(trainee.onboarder).color }}>👤 {trainee.onboarder}</span>}
                           </div>
                         </div>
                       </div>
@@ -3499,7 +3534,7 @@ function TraineePortal({ profile, onLogout, darkMode, onToggleDark }) {
                           <div style={{ fontWeight:600,fontSize:14,color:"#1e293b" }}>{trainee.name}</div>
                           <div style={{ display:"flex",alignItems:"center",gap:5,marginTop:2,flexWrap:"wrap" }}>
                             <span style={{ fontSize:10,color:"#0d9488",fontWeight:600 }}>✅ Selected</span>
-                            {trainee.onboarder && <span style={{ fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:99,background: ONBOARDER_CONFIG[trainee.onboarder]?.bg||"#f1f5f9",color: ONBOARDER_CONFIG[trainee.onboarder]?.color||"#64748b" }}>👤 {trainee.onboarder}</span>}
+                            {trainee.onboarder && <span style={{ fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:99,background: colorForOnboarder(trainee.onboarder).bg, color: colorForOnboarder(trainee.onboarder).color }}>👤 {trainee.onboarder}</span>}
                           </div>
                         </div>
                       </div>
@@ -3595,7 +3630,7 @@ function TraineePortal({ profile, onLogout, darkMode, onToggleDark }) {
                           <div style={{ fontWeight:600,fontSize:14,color:"#1e293b" }}>{trainee.name}</div>
                           <div style={{ display:"flex",alignItems:"center",gap:5,marginTop:2,flexWrap:"wrap" }}>
                             <span style={{ fontSize:10,color:"#d97706",fontWeight:600 }}>❌ Not Selected</span>
-                            {trainee.onboarder && <span style={{ fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:99,background: ONBOARDER_CONFIG[trainee.onboarder]?.bg||"#f1f5f9",color: ONBOARDER_CONFIG[trainee.onboarder]?.color||"#64748b" }}>👤 {trainee.onboarder}</span>}
+                            {trainee.onboarder && <span style={{ fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:99,background: colorForOnboarder(trainee.onboarder).bg, color: colorForOnboarder(trainee.onboarder).color }}>👤 {trainee.onboarder}</span>}
                           </div>
                         </div>
                       </div>
@@ -3693,7 +3728,7 @@ function TraineePortal({ profile, onLogout, darkMode, onToggleDark }) {
                           <div style={{ fontWeight:600,fontSize:14,color:"#1e293b" }}>{trainee.name}</div>
                           <div style={{ display:"flex",alignItems:"center",gap:5,marginTop:2,flexWrap:"wrap" }}>
                             <span style={{ fontSize:10,color:"#be123c",fontWeight:600 }}>🚪 Leaved{trainee.leavedDate ? ` · ${new Date(trainee.leavedDate).toLocaleDateString("en-IN",{day:"numeric",month:"short"})}` : ""}</span>
-                            {trainee.onboarder && <span style={{ fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:99,background: ONBOARDER_CONFIG[trainee.onboarder]?.bg||"#f1f5f9",color: ONBOARDER_CONFIG[trainee.onboarder]?.color||"#64748b" }}>👤 {trainee.onboarder}</span>}
+                            {trainee.onboarder && <span style={{ fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:99,background: colorForOnboarder(trainee.onboarder).bg, color: colorForOnboarder(trainee.onboarder).color }}>👤 {trainee.onboarder}</span>}
                           </div>
                         </div>
                       </div>
@@ -3738,7 +3773,7 @@ function TraineePortal({ profile, onLogout, darkMode, onToggleDark }) {
       </div>
 
       {/* ── Modals ── */}
-      {showAdd && <AddTraineeModal onClose={()=>setShowAdd(false)} onAdd={addTrainee} isAdmin={isAdmin} defaultOnboarder={profile?.name || ""}/>}
+      {showAdd && <AddTraineeModal onClose={()=>setShowAdd(false)} onAdd={addTrainee} isAdmin={isAdmin} defaultOnboarder={profile?.name || ""} onboardersList={onboardersList}/>}
       {showMessages && <DayMessagesPanel
         dayMessages={dayMessages}
         setDayMessages={setDayMessages}
@@ -3812,6 +3847,7 @@ function TraineePortal({ profile, onLogout, darkMode, onToggleDark }) {
           currentUserId={profile?.id}
           onClose={()=>setShowAdminPanel(false)}
           showToast={showToast}
+          onUsersChanged={refreshOnboarders}
         />
       )}
 
@@ -3820,6 +3856,7 @@ function TraineePortal({ profile, onLogout, darkMode, onToggleDark }) {
           trainees={trainees}
           onClose={()=>setShowAnalytics(false)}
           showToast={showToast}
+          onboardersList={onboardersList}
         />
       )}
 
