@@ -1391,31 +1391,57 @@ function BannedScreen({ onLogout }) {
   );
 }
 
-/* ══════════════════════════════ ADMIN PANEL ══════════════════════════════ */
-function AdminPanel({ currentUserId, onClose, showToast }) {
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const load = async () => {
-      const { data, error } = await supabase.from("profiles").select("*").order("created_at", { ascending: true });
-      if (error) { console.error(error); showToast("error", `Load failed: ${error.message}`); }
-      else setUsers(data || []);
-      setLoading(false);
-    };
-    load();
-  }, []);
+/* ══════════════════════════════ ADMIN PANEL ══════════════════════════════ */
+// Full user CRUD. Reads from `profiles`; creates/updates/deletes go through
+// /api/users (Vercel serverless function using the service_role key).
+function AdminPanel({ currentUserId, onClose, showToast }) {
+  const [users,    setUsers]    = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [editing,  setEditing]  = useState(null);   // user row or null
+  const [deleting, setDeleting] = useState(null);   // user row or null
+  const [busy,     setBusy]     = useState(false);  // in-flight /api/users call
+
+  const loadUsers = async () => {
+    setLoading(true);
+    const { data, error } = await supabase.from("profiles").select("*").order("created_at", { ascending: true });
+    if (error) showToast("error", `Load failed: ${error.message}`);
+    else setUsers(data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { loadUsers(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const apiCall = async (method, opts = {}) => {
+    setBusy(true);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data?.session?.access_token;
+      if (!token) throw new Error("Not signed in");
+      const url = "/api/users" + (opts.id ? `?id=${encodeURIComponent(opts.id)}` : "");
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type":"application/json", Authorization:`Bearer ${token}` },
+        body:    opts.body ? JSON.stringify(opts.body) : undefined,
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || `${method} failed (${res.status})`);
+      return json;
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const toggleBan = async (u) => {
     const newVal = !u.is_banned;
     setUsers(us => us.map(x => x.id === u.id ? { ...x, is_banned: newVal } : x));
     const { error } = await supabase.from("profiles").update({ is_banned: newVal }).eq("id", u.id);
     if (error) {
-      console.error(error);
       showToast("error", `Save failed: ${error.message}`);
       setUsers(us => us.map(x => x.id === u.id ? { ...x, is_banned: !newVal } : x));
     } else {
-      showToast("success", newVal ? `${u.email} banned` : `${u.email} unbanned`);
+      showToast("success", newVal ? `${u.email} deactivated` : `${u.email} activated`);
     }
   };
 
@@ -1423,7 +1449,6 @@ function AdminPanel({ currentUserId, onClose, showToast }) {
     setUsers(us => us.map(x => x.id === u.id ? { ...x, role: newRole } : x));
     const { error } = await supabase.from("profiles").update({ role: newRole }).eq("id", u.id);
     if (error) {
-      console.error(error);
       showToast("error", `Save failed: ${error.message}`);
       setUsers(us => us.map(x => x.id === u.id ? { ...x, role: u.role } : x));
     } else {
@@ -1431,58 +1456,98 @@ function AdminPanel({ currentUserId, onClose, showToast }) {
     }
   };
 
+  const handleCreate = async (form) => {
+    await apiCall("POST", { body: form }); // throws on error → modal stays open, toast shown
+    showToast("success", "User created");
+    setCreating(false);
+    await loadUsers();
+  };
+
+  const handleEdit = async (form) => {
+    if (!editing) return;
+    const body = { ...form };
+    if (!body.password) delete body.password;
+    await apiCall("PATCH", { id: editing.id, body });
+    showToast("success", "User updated");
+    setEditing(null);
+    await loadUsers();
+  };
+
+  const handleDelete = async () => {
+    if (!deleting) return;
+    try {
+      await apiCall("DELETE", { id: deleting.id });
+      showToast("success", `${deleting.name || deleting.email} deleted`);
+      setDeleting(null);
+      await loadUsers();
+    } catch (e) {
+      showToast("error", e.message);
+    }
+  };
+
+  const gridCols = "56px 1.4fr 1.8fr 120px 110px 100px 90px";
+
   return (
     <div className="tf-modal-root" style={{ position:"fixed",inset:0,background:"#0009",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }} onClick={onClose}>
-      <div className="tf-modal-card" style={{ width:780,maxWidth:"97vw",maxHeight:"90vh",background:"#fff",borderRadius:20,boxShadow:"0 32px 80px #0004",display:"flex",flexDirection:"column",fontFamily:"'DM Sans',sans-serif",overflow:"hidden" }} onClick={e=>e.stopPropagation()}>
-        <div style={{ padding:"20px 26px",borderBottom:"2px solid #e0e7ff",background:"linear-gradient(135deg,#eef2ff,#ede9fe)",display:"flex",alignItems:"center",justifyContent:"space-between" }}>
+      <div className="tf-modal-card" style={{ width:1000,maxWidth:"97vw",maxHeight:"92vh",background:"#fff",borderRadius:20,boxShadow:"0 32px 80px #0004",display:"flex",flexDirection:"column",fontFamily:"'DM Sans',sans-serif",overflow:"hidden" }} onClick={e=>e.stopPropagation()}>
+        <div style={{ padding:"20px 26px",borderBottom:"2px solid #e0e7ff",background:"linear-gradient(135deg,#eef2ff,#ede9fe)",display:"flex",alignItems:"center",justifyContent:"space-between", gap:12, flexWrap:"wrap" }}>
           <div>
             <div style={{ fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:19,color:"#1e293b" }}>👥 User Management</div>
-            <div style={{ fontSize:12,color:"#6366f1",fontWeight:600,marginTop:2 }}>Manage roles and access for all users</div>
+            <div style={{ fontSize:12,color:"#6366f1",fontWeight:600,marginTop:2 }}>Create, edit, and deactivate users</div>
           </div>
-          <button onClick={onClose} style={{ width:34,height:34,borderRadius:8,border:"none",background:"#fff",cursor:"pointer",fontSize:18,color:"#64748b",boxShadow:"0 2px 8px #0001" }}>×</button>
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <button onClick={()=>setCreating(true)} style={{ padding:"9px 14px", borderRadius:9, border:"none", background:"linear-gradient(135deg,#7C3AED,#6366F1)", color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit", boxShadow:"0 4px 14px rgba(124,58,237,0.25)" }}>+ Add User</button>
+            <button onClick={onClose} style={{ width:34,height:34,borderRadius:8,border:"none",background:"#fff",cursor:"pointer",fontSize:18,color:"#64748b",boxShadow:"0 2px 8px #0001" }}>×</button>
+          </div>
         </div>
 
-        <div style={{ flex:1,overflowY:"auto",padding:24 }}>
+        <div style={{ flex:1, overflowY:"auto", padding:24 }}>
           {loading ? (
-            <div style={{ textAlign:"center",padding:40,color:"#94a3b8" }}>Loading users…</div>
+            <div style={{ textAlign:"center", padding:40, color:"#94a3b8" }}>Loading users…</div>
           ) : users.length === 0 ? (
-            <div style={{ textAlign:"center",padding:40,color:"#94a3b8" }}>No users yet.</div>
+            <div style={{ textAlign:"center", padding:40, color:"#94a3b8" }}>No users yet. Click "+ Add User" to create one.</div>
           ) : (
-            <div style={{ border:"1.5px solid #e8eaf6",borderRadius:14,overflow:"hidden" }}>
-              <div style={{ display:"grid",gridTemplateColumns:"2fr 2fr 130px 130px",padding:"12px 16px",background:"#fafbff",borderBottom:"2px solid #e8eaf6",gap:10 }}>
+            <div style={{ border:"1.5px solid #e8eaf6", borderRadius:14, overflow:"hidden", overflowX:"auto" }}>
+              <div style={{ display:"grid", gridTemplateColumns: gridCols, minWidth: 800, padding:"12px 16px", background:"#fafbff", borderBottom:"2px solid #e8eaf6", gap:10, alignItems:"center" }}>
+                <div/>
                 <div style={thStyle}>Name</div>
                 <div style={thStyle}>Email</div>
-                <div style={{ ...thStyle,textAlign:"center" }}>Role</div>
-                <div style={{ ...thStyle,textAlign:"center" }}>Status</div>
+                <div style={{...thStyle, textAlign:"center"}}>Role</div>
+                <div style={{...thStyle, textAlign:"center"}}>Status</div>
+                <div style={{...thStyle, textAlign:"center"}}>Created</div>
+                <div style={{...thStyle, textAlign:"center"}}>Actions</div>
               </div>
-              {users.map((u,idx) => {
+              {users.map((u, idx) => {
                 const isSelf = u.id === currentUserId;
+                const initials = getInitials(u.name || u.email);
+                const created = u.created_at ? new Date(u.created_at).toLocaleDateString("en-IN", { day:"numeric", month:"short", year:"2-digit" }) : "—";
                 return (
                   <div key={u.id} style={{
-                    display:"grid",gridTemplateColumns:"2fr 2fr 130px 130px",
-                    padding:"13px 16px",gap:10,alignItems:"center",
+                    display:"grid", gridTemplateColumns: gridCols, minWidth: 800,
+                    padding:"12px 16px", gap:10, alignItems:"center",
                     background: idx%2===0 ? "#fff" : "#fafbff",
                     borderBottom:"1px solid #f1f5f9",
                     opacity: u.is_banned ? 0.6 : 1,
                   }}>
-                    <div style={{ fontSize:13,fontWeight:600,color:"#1e293b",display:"flex",alignItems:"center",gap:6 }}>
+                    <div style={{ width:38, height:38, borderRadius:99, background:"linear-gradient(135deg,#7C3AED,#6366F1)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:800, fontSize:14, fontFamily:"'Sora',sans-serif" }}>{initials}</div>
+                    <div style={{ fontSize:13, fontWeight:600, color:"#1e293b", display:"flex", alignItems:"center", gap:6, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                       {u.name || u.email?.split("@")[0] || "—"}
-                      {isSelf && <span style={{ fontSize:10,fontWeight:700,color:"#6366f1",background:"#eef2ff",padding:"1px 7px",borderRadius:99 }}>you</span>}
+                      {isSelf && <span style={{ fontSize:10, fontWeight:700, color:"#6366f1", background:"#eef2ff", padding:"1px 7px", borderRadius:99 }}>you</span>}
                     </div>
-                    <div style={{ fontSize:12,color:"#64748b" }}>{u.email}</div>
+                    <div style={{ fontSize:12, color:"#64748b", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{u.email}</div>
                     <div style={{ textAlign:"center" }}>
                       <select
                         value={u.role || "employee"}
                         disabled={isSelf}
                         onChange={e=>changeRole(u, e.target.value)}
                         style={{
-                          padding:"5px 10px",borderRadius:7,fontSize:11,fontWeight:700,cursor:isSelf?"not-allowed":"pointer",outline:"none",fontFamily:"inherit",
+                          padding:"5px 10px", borderRadius:7, fontSize:11, fontWeight:700, cursor:isSelf?"not-allowed":"pointer", outline:"none", fontFamily:"inherit",
                           background: u.role === "admin" ? "#eef2ff" : "#f0fdf4",
                           color:    u.role === "admin" ? "#6366f1" : "#059669",
                           border: `1.5px solid ${u.role === "admin" ? "#c7d2fe" : "#bbf7d0"}`,
                         }}>
-                        <option value="admin">admin</option>
-                        <option value="employee">employee</option>
+                        <option value="admin">Admin</option>
+                        <option value="employee">Employee</option>
                       </select>
                     </div>
                     <div style={{ textAlign:"center" }}>
@@ -1490,10 +1555,22 @@ function AdminPanel({ currentUserId, onClose, showToast }) {
                         onClick={()=>toggleBan(u)}
                         disabled={isSelf}
                         style={{
-                          padding:"5px 14px",borderRadius:7,fontSize:11,fontWeight:700,border:"none",cursor:isSelf?"not-allowed":"pointer",fontFamily:"inherit",
-                          background: u.is_banned ? "linear-gradient(135deg,#ef4444,#dc2626)" : "linear-gradient(135deg,#22c55e,#16a34a)",
-                          color:"#fff",opacity: isSelf ? 0.5 : 1,
-                        }}>{u.is_banned ? "🚫 Banned" : "✅ Active"}</button>
+                          padding:"5px 12px", borderRadius:99, fontSize:11, fontWeight:700, border:"none", cursor:isSelf?"not-allowed":"pointer", fontFamily:"inherit",
+                          background: u.is_banned ? "linear-gradient(135deg,#94a3b8,#64748b)" : "linear-gradient(135deg,#22c55e,#16a34a)",
+                          color:"#fff", opacity: isSelf ? 0.5 : 1,
+                        }}>{u.is_banned ? "Inactive" : "Active"}</button>
+                    </div>
+                    <div style={{ fontSize:11, color:"#94a3b8", textAlign:"center" }}>{created}</div>
+                    <div style={{ display:"flex", gap:6, justifyContent:"center" }}>
+                      <button
+                        onClick={()=>setEditing(u)}
+                        title="Edit user"
+                        style={{ width:30, height:30, borderRadius:7, border:"1.5px solid #e2e8f0", background:"#fff", cursor:"pointer", fontSize:13, color:"#6366f1" }}>✎</button>
+                      <button
+                        onClick={()=>setDeleting(u)}
+                        disabled={isSelf}
+                        title={isSelf ? "You cannot delete yourself" : "Delete user"}
+                        style={{ width:30, height:30, borderRadius:7, border:"1.5px solid #fecaca", background:"#fff", cursor:isSelf?"not-allowed":"pointer", fontSize:13, color:"#ef4444", opacity:isSelf?0.4:1 }}>🗑</button>
                     </div>
                   </div>
                 );
@@ -1502,13 +1579,183 @@ function AdminPanel({ currentUserId, onClose, showToast }) {
           )}
         </div>
 
-        <div style={{ padding:"14px 26px",borderTop:"1.5px solid #e8eaf6",background:"#fafbff",fontSize:11,color:"#94a3b8",lineHeight:1.6 }}>
-          💡 New users: create their account in <strong>Supabase Dashboard → Authentication → Users</strong>. A profile row is created automatically on first login (as <em>employee</em>), then you can promote them here.
+        <div style={{ padding:"12px 26px", borderTop:"1.5px solid #e8eaf6", background:"#fafbff", fontSize:11, color:"#94a3b8", lineHeight:1.5 }}>
+          🔒 Only admins can access this panel. Passwords are stored hashed by Supabase Auth — never in plain text.
+        </div>
+      </div>
+
+      {creating && (
+        <UserFormModal
+          mode="create"
+          onCancel={()=>setCreating(false)}
+          onSubmit={handleCreate}
+          busy={busy}
+        />
+      )}
+      {editing && (
+        <UserFormModal
+          mode="edit"
+          initial={editing}
+          onCancel={()=>setEditing(null)}
+          onSubmit={handleEdit}
+          busy={busy}
+        />
+      )}
+      {deleting && (
+        <ConfirmDialog
+          title="Delete user?"
+          message={`Delete ${deleting.name || deleting.email}? This will remove their account and unassign their trainees.`}
+          confirmLabel="Delete"
+          confirmColor="#dc2626"
+          onCancel={()=>setDeleting(null)}
+          onConfirm={handleDelete}
+          busy={busy}
+        />
+      )}
+    </div>
+  );
+}
+
+function getInitials(nameOrEmail = "") {
+  const s = (nameOrEmail || "").trim();
+  if (!s) return "?";
+  if (s.includes("@")) return s[0].toUpperCase();
+  const parts = s.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) return parts[0][0].toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+// Shared create/edit user modal — password is optional when editing
+function UserFormModal({ mode, initial, onCancel, onSubmit, busy }) {
+  const isEdit = mode === "edit";
+  const [form, setForm] = useState({
+    name:            initial?.name  || "",
+    email:           initial?.email || "",
+    password:        "",
+    confirmPassword: "",
+    role:            initial?.role  || "employee",
+  });
+  const [showPw,        setShowPw]        = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
+  const [errors,        setErrors]        = useState({});
+  const [submitting,    setSubmitting]    = useState(false);
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const validate = () => {
+    const errs = {};
+    if (!form.name.trim())  errs.name  = "Name is required";
+    if (!form.email.trim()) errs.email = "Email is required";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) errs.email = "Enter a valid email";
+
+    if (!isEdit) {
+      if (!form.password)                errs.password        = "Password is required";
+      else if (form.password.length < 8) errs.password        = "Must be at least 8 characters";
+      if (form.password !== form.confirmPassword) errs.confirmPassword = "Passwords do not match";
+    } else if (form.password) {
+      if (form.password.length < 8) errs.password = "Must be at least 8 characters";
+      if (form.password !== form.confirmPassword) errs.confirmPassword = "Passwords do not match";
+    }
+    return errs;
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    const errs = validate();
+    setErrors(errs);
+    if (Object.keys(errs).length) return;
+    setSubmitting(true);
+    try {
+      await onSubmit({
+        name:     form.name.trim(),
+        email:    form.email.trim(),
+        password: form.password || undefined,
+        role:     form.role,
+      });
+    } catch {
+      // parent already showed a toast; keep the modal open so user can fix and retry
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"#0009", zIndex:600, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }} onClick={onCancel}>
+      <form onSubmit={submit} style={{ width:460, maxWidth:"96vw", background:"#fff", borderRadius:16, boxShadow:"0 32px 80px #0005", fontFamily:"'DM Sans',sans-serif", overflow:"hidden" }} onClick={e=>e.stopPropagation()}>
+        <div style={{ padding:"18px 22px", background:"linear-gradient(135deg,#eef2ff,#ede9fe)", borderBottom:"1.5px solid #e0e7ff", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          <div style={{ fontFamily:"'Sora',sans-serif", fontWeight:800, fontSize:16, color:"#1e293b" }}>{isEdit ? "Edit User" : "Add New User"}</div>
+          <button type="button" onClick={onCancel} style={{ width:30, height:30, borderRadius:7, border:"none", background:"#fff", cursor:"pointer", fontSize:16, color:"#64748b" }}>×</button>
+        </div>
+
+        <div style={{ padding:"18px 22px", display:"flex", flexDirection:"column", gap:12 }}>
+          <FormField label="Full Name" error={errors.name}>
+            <input type="text" value={form.name} onChange={e=>set("name", e.target.value)} placeholder="e.g. Kritika Sharma" style={inputStyle}/>
+          </FormField>
+
+          <FormField label="Email" error={errors.email}>
+            <input type="email" value={form.email} onChange={e=>set("email", e.target.value)} placeholder="user@example.com" style={inputStyle} autoComplete="off"/>
+          </FormField>
+
+          <FormField label={isEdit ? "New Password (leave blank to keep current)" : "Password"} error={errors.password}>
+            <div style={{ position:"relative" }}>
+              <input type={showPw?"text":"password"} value={form.password} onChange={e=>set("password", e.target.value)} placeholder={isEdit ? "•••••••• (unchanged)" : "At least 8 characters"} style={{ ...inputStyle, paddingRight:36 }} autoComplete="new-password"/>
+              <button type="button" onClick={()=>setShowPw(s=>!s)} style={eyeBtnStyle} tabIndex={-1}>{showPw?"🙈":"👁"}</button>
+            </div>
+          </FormField>
+
+          {(!isEdit || form.password) && (
+            <FormField label="Confirm Password" error={errors.confirmPassword}>
+              <div style={{ position:"relative" }}>
+                <input type={showConfirmPw?"text":"password"} value={form.confirmPassword} onChange={e=>set("confirmPassword", e.target.value)} placeholder="Re-enter password" style={{ ...inputStyle, paddingRight:36 }} autoComplete="new-password"/>
+                <button type="button" onClick={()=>setShowConfirmPw(s=>!s)} style={eyeBtnStyle} tabIndex={-1}>{showConfirmPw?"🙈":"👁"}</button>
+              </div>
+            </FormField>
+          )}
+
+          <FormField label="Role">
+            <select value={form.role} onChange={e=>set("role", e.target.value)} style={inputStyle}>
+              <option value="employee">Employee</option>
+              <option value="admin">Admin</option>
+            </select>
+          </FormField>
+        </div>
+
+        <div style={{ padding:"14px 22px", borderTop:"1.5px solid #f1f5f9", background:"#fafbff", display:"flex", justifyContent:"flex-end", gap:8 }}>
+          <button type="button" onClick={onCancel} disabled={submitting||busy} style={{ padding:"9px 18px", borderRadius:9, border:"1.5px solid #e2e8f0", background:"#fff", color:"#64748b", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>Cancel</button>
+          <button type="submit" disabled={submitting||busy} style={{ padding:"9px 18px", borderRadius:9, border:"none", background:"linear-gradient(135deg,#7C3AED,#6366F1)", color:"#fff", fontWeight:700, fontSize:13, cursor:(submitting||busy)?"wait":"pointer", fontFamily:"inherit", boxShadow:"0 4px 14px rgba(124,58,237,0.25)", opacity:(submitting||busy)?0.7:1 }}>{submitting?"Saving…":(isEdit?"Save Changes":"Create User")}</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function FormField({ label, error, children }) {
+  return (
+    <label style={{ display:"flex", flexDirection:"column", gap:5 }}>
+      <span style={{ fontSize:11, fontWeight:700, color:"#64748b", textTransform:"uppercase", letterSpacing:"0.04em" }}>{label}</span>
+      {children}
+      {error && <span style={{ fontSize:11, color:"#dc2626", fontWeight:600 }}>{error}</span>}
+    </label>
+  );
+}
+
+function ConfirmDialog({ title, message, confirmLabel="Confirm", confirmColor="#7C3AED", onCancel, onConfirm, busy }) {
+  return (
+    <div style={{ position:"fixed", inset:0, background:"#0009", zIndex:700, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }} onClick={onCancel}>
+      <div style={{ width:400, maxWidth:"96vw", background:"#fff", borderRadius:14, boxShadow:"0 32px 80px #0005", fontFamily:"'DM Sans',sans-serif", padding:22 }} onClick={e=>e.stopPropagation()}>
+        <div style={{ fontFamily:"'Sora',sans-serif", fontWeight:800, fontSize:17, color:"#1e293b", marginBottom:8 }}>{title}</div>
+        <div style={{ fontSize:13, color:"#64748b", lineHeight:1.5, marginBottom:18 }}>{message}</div>
+        <div style={{ display:"flex", justifyContent:"flex-end", gap:8 }}>
+          <button onClick={onCancel} disabled={busy} style={{ padding:"9px 18px", borderRadius:9, border:"1.5px solid #e2e8f0", background:"#fff", color:"#64748b", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>Cancel</button>
+          <button onClick={onConfirm} disabled={busy} style={{ padding:"9px 18px", borderRadius:9, border:"none", background:confirmColor, color:"#fff", fontWeight:700, fontSize:13, cursor:busy?"wait":"pointer", fontFamily:"inherit", opacity:busy?0.7:1 }}>{busy?"Working…":confirmLabel}</button>
         </div>
       </div>
     </div>
   );
 }
+
+const inputStyle  = { padding:"9px 12px", border:"1.5px solid #e2e8f0", borderRadius:8, fontSize:13, fontFamily:"inherit", outline:"none", width:"100%", boxSizing:"border-box" };
+const eyeBtnStyle = { position:"absolute", top:"50%", right:8, transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", fontSize:16, padding:2 };
 
 /* ═══════════════════════════════ ANALYTICS REPORT ═══════════════════════════════ */
 // ── Pure-SVG donut chart (no chart lib in package.json) ──
